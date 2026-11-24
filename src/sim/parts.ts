@@ -1,4 +1,5 @@
 import type { PinName } from './board';
+import { SPEC } from './catalog';
 
 /** Everything a part can tell the UI about itself. */
 export interface PartState {
@@ -20,6 +21,8 @@ export interface Part {
   update?(t: number): void;
   attach?(ctx: PartContext): void;
   state(): PartState;
+  /** Current drawn from the board's 5 V rail right now, in mA, and whether that figure is an approximation. */
+  railMa?(): { ma: number; approx: boolean };
   /** Problems that would break or damage the real build. */
   warnings: string[];
 }
@@ -28,7 +31,11 @@ function warnOnce(list: string[], msg: string): void {
   if (!list.includes(msg)) list.push(msg);
 }
 
-/** LED on a digital pin. Brightness follows the PWM duty cycle. */
+/**
+ * LED on a digital pin. Brightness follows the PWM duty cycle.
+ * `builtin` is the Uno's own "L" LED on D13 (yellow, 1 kΩ, LMV358 buffer — UNO R3 schematic);
+ * otherwise it is a Kingbright WP7113ID with a series resistor.
+ */
 export class Led implements Part {
   readonly type = 'led';
   readonly inputs: PinName[];
@@ -38,8 +45,27 @@ export class Led implements Part {
   private window: { high: number; total: number; start: number } = { high: 0, total: 0, start: 0 };
   private duty = 0;
 
-  constructor(readonly id: string, readonly pin: PinName, readonly color = '#ff5a4f') {
+  constructor(
+    readonly id: string,
+    readonly pin: PinName,
+    readonly color = '#ff5a4f',
+    readonly builtin = false,
+    readonly resistorOhms = 330,
+  ) {
     this.inputs = [pin];
+    const { vfTyp, ifMaxMa } = SPEC.wp7113id;
+    if (!builtin && this.onCurrentMa() > ifMaxMa) {
+      warnOnce(
+        this.warnings,
+        `LED ${id}: ${resistorOhms} Ω gives ~${this.onCurrentMa().toFixed(0)} mA, above the ${ifMaxMa} mA maximum of a WP7113ID — use at least ${Math.ceil(((5 - vfTyp) / ifMaxMa) * 1000)} Ω.`,
+      );
+    }
+  }
+
+  /** Current while lit, from Ohm's law: built-in ≤ 5 V / 1 kΩ (upper bound), external (5 V − VF typ) / R. */
+  onCurrentMa(): number {
+    if (this.builtin) return (5 / SPEC.uno.builtinLedSeriesOhms) * 1000;
+    return ((5 - SPEC.wp7113id.vfTyp) / Math.max(1, this.resistorOhms)) * 1000;
   }
 
   onPin(_pin: PinName, high: boolean, t: number): void {
@@ -59,14 +85,19 @@ export class Led implements Part {
     }
   }
 
+  railMa() {
+    return { ma: Math.max(this.duty, this.high ? 1 : 0) * this.onCurrentMa(), approx: this.builtin };
+  }
+
   state(): PartState {
     return { on: this.high, brightness: Math.round(this.duty * 100) / 100 };
   }
 }
 
 /**
- * Hobby servo (SG90-like) on a PWM pin. The angle comes from the pulse width, as on the real part:
- * 544–2400 µs maps to 0–180° (Arduino Servo library defaults), and the horn moves at a finite speed.
+ * TowerPro SG90 micro servo. The angle comes from the pulse width, as on the real part:
+ * 544–2400 µs maps to 0–180° (Arduino Servo library limits, Servo.h), and the horn turns at
+ * 60° per 0.1 s (TowerPro, 4.8 V).
  */
 export class Servo implements Part {
   readonly type = 'servo';
@@ -81,7 +112,12 @@ export class Servo implements Part {
   constructor(
     readonly id: string,
     readonly pin: PinName,
-    readonly opts = { minUs: 544, maxUs: 2400, degPerSec: 600, stallTorqueKgCm: 1.8 },
+    readonly opts = {
+      minUs: SPEC.servoLib.minUs,
+      maxUs: SPEC.servoLib.maxUs,
+      degPerSec: 60 / SPEC.sg90.secPer60Deg,
+      stallTorqueKgCm: SPEC.sg90.stallTorqueKgfCm,
+    },
   ) {
     this.inputs = [pin];
   }
@@ -114,15 +150,25 @@ export class Servo implements Part {
     this.angle += Math.abs(diff) <= step ? diff : Math.sign(diff) * step;
   }
 
+  get moving(): boolean {
+    return Math.abs(this.target - this.angle) > 0.5;
+  }
+
+  /** TowerPro publishes no current figure; see SPEC.sg90.movingMaApprox. */
+  railMa() {
+    return { ma: this.moving ? SPEC.sg90.movingMaApprox : 0, approx: true };
+  }
+
   state(): PartState {
     return { angle: Math.round(this.angle * 10) / 10, target: Math.round(this.target * 10) / 10, pulseUs: Math.round(this.pulseUs) };
   }
 }
 
 /**
- * Stepper motor behind an A4988-style STEP/DIR driver. Every rising edge on STEP moves one
- * (micro)step in the direction set by DIR. Pulses faster than the motor can follow are lost,
- * as a real stepper stalls instead of speeding up.
+ * NEMA 17 stepper (SY42STH47-1206A, 200 steps/rev) behind a Pololu A4988 carrier. Every rising edge on
+ * STEP moves one (micro)step in the direction set by DIR. The driver's timing limits from the Allegro
+ * datasheet are checked (STEP ≥ 1 µs high and low, DIR set up ≥ 200 ns before STEP). Pulses faster than
+ * the motor can follow are lost, as a real stepper stalls instead of speeding up (that rate is approximate).
  */
 export class StepperA4988 implements Part {
   readonly type = 'stepper';
@@ -131,27 +177,48 @@ export class StepperA4988 implements Part {
   position = 0; // in microsteps
   missed = 0;
   private dirHigh = false;
+  private dirChangedAt = -1;
+  private stepHigh = false;
+  private stepRose = -1;
+  private stepFell = -1;
   private lastStep = -1;
 
   constructor(
     readonly id: string,
     readonly stepPin: PinName,
     readonly dirPin: PinName,
-    readonly opts = { stepsPerRev: 200, microsteps: 1, maxStepsPerSec: 1000 },
+    readonly opts = { stepsPerRev: SPEC.nema17.stepsPerRev, microsteps: 1, maxStepsPerSec: SPEC.nema17.maxStepsPerSecApprox },
   ) {
     this.inputs = [stepPin, dirPin];
   }
 
   onPin(pin: PinName, high: boolean, t: number): void {
     if (pin === this.dirPin) {
+      if (high !== this.dirHigh) this.dirChangedAt = t;
       this.dirHigh = high;
       return;
     }
-    if (!high) return;
+    if (high === this.stepHigh) return;
+    this.stepHigh = high;
+    const { stepHighMinUs, stepLowMinUs, setupNs } = SPEC.a4988;
+    if (!high) {
+      if (this.stepRose >= 0 && (t - this.stepRose) * 1e6 < stepHighMinUs) {
+        warnOnce(this.warnings, `Stepper ${this.id}: STEP high for ${((t - this.stepRose) * 1e6).toFixed(2)} µs — the A4988 needs at least ${stepHighMinUs} µs.`);
+      }
+      this.stepFell = t;
+      return;
+    }
+    this.stepRose = t;
+    if (this.stepFell >= 0 && (t - this.stepFell) * 1e6 < stepLowMinUs) {
+      warnOnce(this.warnings, `Stepper ${this.id}: STEP low for ${((t - this.stepFell) * 1e6).toFixed(2)} µs — the A4988 needs at least ${stepLowMinUs} µs.`);
+    }
+    if (this.dirChangedAt >= 0 && (t - this.dirChangedAt) * 1e9 < setupNs) {
+      warnOnce(this.warnings, `Stepper ${this.id}: DIR changed ${((t - this.dirChangedAt) * 1e9).toFixed(0)} ns before STEP — the A4988 needs ${setupNs} ns setup time.`);
+    }
     const minGap = 1 / (this.opts.maxStepsPerSec * this.opts.microsteps);
     if (this.lastStep >= 0 && t - this.lastStep < minGap) {
       this.missed++;
-      warnOnce(this.warnings, `Stepper ${this.id}: STEP pulses faster than ${this.opts.maxStepsPerSec} full steps/s — a real motor would stall and lose steps.`);
+      warnOnce(this.warnings, `Stepper ${this.id}: STEP pulses faster than ~${this.opts.maxStepsPerSec} full steps/s (approx.) — a real motor would stall and lose steps.`);
       return;
     }
     this.lastStep = t;
@@ -162,18 +229,26 @@ export class StepperA4988 implements Part {
     return (this.position / (this.opts.stepsPerRev * this.opts.microsteps)) * 360;
   }
 
+  /** The carrier's logic side runs from the Uno 5 V (IDD ≤ 8 mA); the motor has its own 8–35 V supply. */
+  railMa() {
+    return { ma: SPEC.a4988.logicMaMax, approx: false };
+  }
+
   state(): PartState {
     return { steps: this.position, angle: Math.round(this.angle * 10) / 10, missed: this.missed };
   }
 }
 
 /**
- * Push button between a pin and GND, read with INPUT_PULLUP (pressed = LOW).
- * A real press always lasts some time, so a release is held back until simulated time has passed the
- * press by `holdSec` (and by at least one update) — otherwise a quick UI click whose press and release
- * land between two simulation frames would never reach the firmware.
+ * Omron B3F-1000 tactile switch between a pin and GND, read with INPUT_PULLUP (pressed = LOW).
+ * Contacts bounce: the datasheet allows up to 5 ms. The exact bounce pattern is not specified, so the
+ * model toggles the contact every millisecond for 4 ms after each press and release (an approximation
+ * inside the 5 ms limit) — enough to expose firmware that does not debounce.
+ * A release is held back until simulated time has passed the press by `holdSec` and the press bounce has
+ * settled, so a quick UI click whose press and release land between two frames still reaches the firmware.
  */
 export class Button implements Part {
+  static readonly BOUNCE_EDGES = 4; // 1 ms apart, all inside the 5 ms datasheet limit
   readonly type = 'button';
   readonly inputs: PinName[] = [];
   warnings: string[] = [];
@@ -181,22 +256,23 @@ export class Button implements Part {
   private ctx?: PartContext;
   private now = 0; // simulated time of the last update
   private downAt = 0;
-  private releaseAfter?: number; // pending release: hold the pin low for this many simulated seconds
+  private releaseAfter?: number; // pending release: keep the contact closed for this many simulated seconds
+  private bounce: { at: number; high: boolean }[] = [];
 
-  constructor(readonly id: string, readonly pin: PinName) {}
+  constructor(readonly id: string, readonly pin: PinName, readonly bounces = true) {}
 
   attach(ctx: PartContext): void {
     this.ctx = ctx;
     ctx.setDigitalInput(this.pin, true);
   }
 
-  /** Press (`down`) or release the button; a release keeps the pin low for at least `holdSec` of simulated time. */
+  /** Press (`down`) or release the button; a release keeps the contact closed for at least `holdSec` of simulated time. */
   press(down: boolean, holdSec = 0): void {
     if (down) {
       this.pressed = true;
       this.downAt = this.now;
       this.releaseAfter = undefined;
-      this.ctx?.setDigitalInput(this.pin, false);
+      this.settle(false);
     } else if (this.pressed) {
       this.releaseAfter = holdSec;
       this.tryRelease();
@@ -205,15 +281,28 @@ export class Button implements Part {
 
   update(t: number): void {
     this.now = t;
+    while (this.bounce.length && this.bounce[0].at <= t) {
+      this.ctx?.setDigitalInput(this.pin, this.bounce.shift()!.high);
+    }
     this.tryRelease();
   }
 
+  /** Drive the pin to `high`; if the contacts bounce, chatter for a few ms and end at `high`. */
+  private settle(high: boolean): void {
+    this.ctx?.setDigitalInput(this.pin, high);
+    this.bounce = [];
+    if (!this.bounces) return;
+    for (let i = 1; i <= Button.BOUNCE_EDGES; i++) {
+      this.bounce.push({ at: this.now + i * 0.001 - 1e-9, high: i % 2 === 0 ? high : !high });
+    }
+  }
+
   private tryRelease(): void {
-    if (this.releaseAfter === undefined) return;
+    if (this.releaseAfter === undefined || this.bounce.length) return;
     if (this.now <= this.downAt || this.now - this.downAt < this.releaseAfter) return;
     this.pressed = false;
     this.releaseAfter = undefined;
-    this.ctx?.setDigitalInput(this.pin, true);
+    this.settle(true);
   }
 
   state(): PartState {
@@ -221,7 +310,7 @@ export class Button implements Part {
   }
 }
 
-/** Potentiometer as a voltage divider on an analog pin. */
+/** Bourns PTV09A 10 kΩ linear potentiometer as a voltage divider between 5 V and GND on an analog pin. */
 export class Potentiometer implements Part {
   readonly type = 'pot';
   readonly inputs: PinName[] = [];
@@ -239,6 +328,11 @@ export class Potentiometer implements Part {
   set(value: number): void {
     this.value = Math.min(1, Math.max(0, value));
     this.ctx?.setAnalogInput(this.pin, this.value * 5);
+  }
+
+  /** 5 V across the 10 kΩ track: 0.5 mA, whatever the wiper position. */
+  railMa() {
+    return { ma: (5 / SPEC.ptv09.ohms) * 1000, approx: false };
   }
 
   state(): PartState {

@@ -95,3 +95,12 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
   .panel.left, .panel.right { border: 0; border-top: 1px solid var(--line); overflow: visible; }
   .tagline { display: none; }
 }
+
+.small { font-size: 12px; }
+.bom { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.bom li { padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 4px; }
+.mpn { color: var(--accent); font-weight: 600; user-select: all; }
+.bom-specs { font-size: 12px; }
+.bom-note { font-size: 12px; color: #f0c987; }
+.bom-links { display: flex; gap: 14px; font-size: 12.5px; }
+.bom-links a { color: var(--cyan); }

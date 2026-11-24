@@ -83,9 +83,9 @@ describe('compiled examples', () => {
     expect(elbow.missed).toBe(0);
     expect(sim.snapshot().serial).toContain('elbow -> 0');
 
-    // a UI click: press and release arrive before the simulation advances at all
+    // a UI click held for 50 ms: press and release both arrive before the simulation advances at all
     button.press(true);
-    button.press(false);
+    button.press(false, 0.05);
     sim.step(0.3);
     expect(button.pressed).toBe(false);
     expect(elbow.position).toBe(50);

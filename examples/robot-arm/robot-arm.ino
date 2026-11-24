@@ -10,7 +10,9 @@ const int POT_PIN = A0;
 Servo base;
 long elbowSteps = 0;
 long elbowTarget = 50;  // 50 full steps = 90° on a 200-step motor
-bool lastButton = HIGH;
+bool lastButton = HIGH;   // debounced level
+bool lastReading = HIGH;  // raw level
+unsigned long lastChangeMs = 0;
 unsigned long lastStepUs = 0;
 
 void setup() {
@@ -27,13 +29,21 @@ void loop() {
   int angle = map(analogRead(POT_PIN), 0, 1023, 0, 180);
   base.write(angle);
 
-  bool button = digitalRead(BUTTON_PIN);
-  if (lastButton == HIGH && button == LOW) {
-    elbowTarget = elbowTarget == 0 ? 50 : 0;
-    Serial.print("elbow -> ");
-    Serial.println(elbowTarget);
+  // Debounce: the Omron B3F contacts bounce for up to 5 ms, so a level only counts once it has been
+  // stable for 10 ms.
+  bool reading = digitalRead(BUTTON_PIN);
+  if (reading != lastReading) {
+    lastReading = reading;
+    lastChangeMs = millis();
   }
-  lastButton = button;
+  if (millis() - lastChangeMs >= 10 && reading != lastButton) {
+    lastButton = reading;
+    if (lastButton == LOW) {
+      elbowTarget = elbowTarget == 0 ? 50 : 0;
+      Serial.print("elbow -> ");
+      Serial.println(elbowTarget);
+    }
+  }
 
   if (elbowSteps != elbowTarget && micros() - lastStepUs >= 2500) {
     bool forward = elbowTarget > elbowSteps;

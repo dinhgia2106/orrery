@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { CUSTOM_PARTS, EXAMPLES, type Example } from './examples';
-import type { PartSpec } from './sim/engine';
+import { SPEC } from './sim/catalog';
+import { billOfMaterials, type BomLine, type PartSpec } from './sim/engine';
 import { parseIntelHex } from './sim/hex';
 import { Button, Potentiometer } from './sim/parts';
 import { useSimulation } from './useSimulation';
@@ -11,13 +12,76 @@ function describePin(spec: PartSpec): string {
   return spec.type === 'stepper' ? `STEP ${spec.step} · DIR ${spec.dir}` : spec.pin;
 }
 
-const LABELS: Record<string, string> = {
-  led: 'LED',
-  servo: 'Servo SG90',
-  stepper: 'Stepper · A4988',
-  button: 'Push button',
-  pot: 'Potentiometer',
-};
+function label(spec: PartSpec): string {
+  switch (spec.type) {
+    case 'led':
+      return spec.builtin ? 'On-board LED "L"' : 'LED 5 mm · WP7113ID';
+    case 'servo':
+      return 'Servo · TowerPro SG90';
+    case 'stepper':
+      return 'NEMA 17 + A4988';
+    case 'button':
+      return 'Button · Omron B3F-1000';
+    case 'pot':
+      return 'Pot · Bourns PTV09 10 kΩ';
+  }
+}
+
+function bomCsv(lines: BomLine[]): string {
+  const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [['Qty', 'Part', 'Manufacturer', 'MPN', 'Used by', 'Product page', 'Datasheet']];
+  for (const l of lines) rows.push([String(l.qty), l.item.name, l.item.manufacturer, l.item.mpn, l.usedBy.join(' '), l.item.url, l.item.datasheet.url]);
+  return rows.map((r) => r.map(q).join(',')).join('\r\n') + '\r\n';
+}
+
+function Bom({ parts }: { parts: PartSpec[] }) {
+  const lines = billOfMaterials(parts);
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([bomCsv(lines)], { type: 'text/csv' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'orrery-bom.csv' });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <>
+      <ul className="bom">
+        {lines.map((l) => (
+          <li key={l.item.key}>
+            <div className="part-head">
+              <strong>
+                {l.qty}× {l.item.name}
+              </strong>
+            </div>
+            <div className="mono">
+              {l.item.manufacturer} <b className="mpn">{l.item.mpn}</b>
+            </div>
+            <div className="bom-specs muted">{l.item.specs.join(' · ')}</div>
+            {l.item.notes?.map((n) => (
+              <div key={n} className="bom-note">
+                {n}
+              </div>
+            ))}
+            <div className="bom-links">
+              <a href={l.item.url} target="_blank" rel="noreferrer">
+                Product page
+              </a>
+              <a href={l.item.datasheet.url} target="_blank" rel="noreferrer">
+                Datasheet
+              </a>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">
+        Not listed: breadboard, jumper wires, a separate 5 V supply for servos and an {SPEC.a4988.vmotMinV}–{SPEC.a4988.vmotMaxV} V supply for the
+        A4988 motor side. Printed arm parts are custom.
+      </p>
+      <button className="press" onClick={download}>
+        Export BOM (.csv)
+      </button>
+    </>
+  );
+}
 
 export default function App() {
   const { sim, snapshot, running, setRunning, speed, setSpeed, realtime, load } = useSimulation();
@@ -65,9 +129,10 @@ export default function App() {
     }
   };
 
-  // How long the user held a button, in simulated seconds (wall time × speed).
+  // How long the user held a button, in simulated seconds (wall time × speed). A click counts as at least
+  // 50 ms so firmware that debounces still sees it — a UI choice, not a measured or datasheet figure.
   const pressStart = useRef(0);
-  const heldSimSec = () => ((performance.now() - pressStart.current) / 1000) * speed;
+  const heldSimSec = () => Math.max(0.05, ((performance.now() - pressStart.current) / 1000) * speed);
 
   const restart = () => {
     if (loaded.current) load(loaded.current.program, loaded.current.parts);
@@ -127,7 +192,7 @@ export default function App() {
 
       <main className="stage">
         <Suspense fallback={<div className="loading">Loading 3D scene…</div>}>
-          <Scene sim={sim} />
+          <Scene sim={sim} specs={parts} />
         </Suspense>
       </main>
 
@@ -140,7 +205,7 @@ export default function App() {
             return (
               <li key={spec.id}>
                 <div className="part-head">
-                  <strong>{LABELS[spec.type]}</strong>
+                  <strong>{label(spec)}</strong>
                   <span className="mono muted">{describePin(spec)}</span>
                 </div>
                 {st && (
@@ -177,8 +242,9 @@ export default function App() {
 
         <h2>Power</h2>
         <p className="mono">
-          Peak 5 V rail <b>{snapshot?.railMa ?? 0} mA</b> / 500 mA USB
+          Peak 5 V rail <b>~{snapshot?.railMa ?? 0} mA</b> / {SPEC.uno.usbFuseMa} mA USB fuse
         </p>
+        <p className="muted small">Approx.: the Uno's own draw and the SG90 current are not in their datasheets.</p>
 
         <h2>Checks</h2>
         {snapshot?.warnings.length ? (
@@ -193,6 +259,9 @@ export default function App() {
 
         <h2>Serial monitor</h2>
         <pre className="serial">{snapshot?.serial || '—'}</pre>
+
+        <h2>Bill of materials</h2>
+        <Bom parts={parts} />
       </aside>
     </div>
   );

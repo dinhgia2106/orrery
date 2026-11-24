@@ -9,14 +9,24 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 ## What works today
 
 - **Arduino Uno running real firmware** — an ATmega328P emulated instruction by instruction with [avr8js](https://github.com/wokwi/avr8js) (timers, GPIO, ADC, UART). Load any `.hex` built by Arduino IDE / `arduino-cli`.
-- **Parts that behave like the hardware**
-  - LED with PWM brightness
-  - Hobby servo: angle from the pulse width (544–2400 µs), finite slew speed like an SG90
-  - Stepper behind an A4988 driver: STEP/DIR pulses, and steps that come too fast are **lost**, as on a real motor
-  - Push button (INPUT_PULLUP) and potentiometer you can operate while the firmware runs
-- **3D mechanism** — a two-joint arm whose base follows the servo and whose elbow follows the stepper.
-- **Checks** — 5 V rail current against the 500 mA a USB port gives; servo driven by `analogWrite()` instead of the Servo library; pulses outside a servo's range; stepper stall.
+- **Real parts, with part numbers** — every simulated part is a specific product you can buy, and its model uses that product's datasheet (sources are cited in [`src/sim/catalog.ts`](src/sim/catalog.ts)):
+
+  | Part | Manufacturer / MPN | What the model takes from the datasheet |
+  |---|---|---|
+  | Arduino UNO R3 | Arduino A000066 | 68.6 × 53.4 mm board, 8.5 mm headers, D13 "L" LED (yellow, 1 kΩ), 500 mA USB polyfuse |
+  | Micro servo | TowerPro SG90 | 0.1 s / 60° slew, 1.8 kgf·cm, 23.1 × 12.2 × 29 mm; pulse 544–2400 µs → 0–180° (Arduino Servo library) |
+  | Stepper driver | Pololu 1182 (Allegro A4988) | STEP ≥ 1 µs high/low and DIR setup ≥ 200 ns are checked; logic draw ≤ 8 mA |
+  | Stepper motor | SOYO SY42STH47-1206A (Pololu 1200) | 200 steps/rev, 42.3 × 48 mm, 5 mm D shaft |
+  | Push button | Omron B3F-1000 | 6 × 6 mm, contacts **bounce** (≤ 5 ms) — firmware without debouncing misbehaves, as on the bench |
+  | Potentiometer | Bourns PTV09A-2020F-B103 | 10 kΩ linear, 280° travel; 0.5 mA from 5 V |
+  | LED | Kingbright WP7113ID | VF 1.9 V, 30 mA max → current from the series resistor, warning if it is too small |
+
+- **3D bench at real scale** — procedurally modelled from those dimensions (no third-party CAD files). Only the parts in the project are drawn, wired from the right Uno header pins; the robot-arm links and brackets are custom printed parts.
+- **Bill of materials** — quantity, MPN, product page and datasheet for each part, exportable as CSV.
+- **Checks** — 5 V rail current against the Uno's 500 mA USB fuse; servo driven by `analogWrite()` instead of the Servo library; pulses outside a servo's range; A4988 timing; stepper stall; LED over-current.
 - **Serial monitor** for `Serial.print()`.
+
+**Approximations** (marked "approx." in the UI and code): TowerPro publishes no current rating for the SG90 (the model uses the low end of the 0.5–2 A its site quotes while the horn moves); the Uno datasheet leaves its own consumption blank (50 mA is an estimate); the stepper's maximum step rate (1000 steps/s) is an estimate because no pull-out torque curve is published; the bounce pattern is invented within the 5 ms limit; some board-feature positions and the SG90 tab span are read from outlines, not exact drawings.
 
 ## Roadmap — what a robot or IoT build needs
 
@@ -30,7 +40,7 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 | Power | Battery and regulator models, per-rail current budget, brown-out |
 | Connectivity | ESP32 WiFi bridged to real MQTT / HTTP / WebSocket servers |
 | Mechanics | Physics engine (joint torque, gravity, collisions), STL / STEP import, sensors that measure the 3D scene |
-| Workflow | Visual wiring editor, in-browser code editor with a compile service, shareable project links, BOM export |
+| Workflow | Visual wiring editor, in-browser code editor with a compile service, shareable project links |
 
 ## Run it
 
@@ -63,12 +73,13 @@ The CPU runs in 1 ms slices; after each slice every part updates its dynamics (s
 
 ```
 src/sim/board.ts    Arduino Uno: CPU, timers, ports, ADC, USART; pin mapping and edge events
+src/sim/catalog.ts  real parts: MPNs, links and the datasheet figures the models use
 src/sim/parts.ts    LED, servo, stepper + A4988, button, potentiometer
 src/sim/engine.ts   wiring, time slicing, power check, snapshots for the UI
 src/sim/hex.ts      Intel HEX reader / writer
 src/sim/demos.ts    hand-assembled Blink
 public/examples/    compiled example firmware (arduino-cli, arduino:avr 1.8.8)
-src/Scene.tsx       3D board and arm (three.js, react-three-fiber)
+src/Scene.tsx       3D bench in millimetres: Uno, parts, wires, arm (three.js, react-three-fiber)
 src/App.tsx         workbench UI
 examples/           Arduino sketches for the examples
 ```

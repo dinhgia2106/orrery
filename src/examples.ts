@@ -26,7 +26,7 @@ const ARM_PARTS: PartSpec[] = [
   { id: 'elbow', type: 'stepper', step: 'D3', dir: 'D4' },
   { id: 'home', type: 'button', pin: 'D2' },
   { id: 'knob', type: 'pot', pin: 'A0' },
-  { id: 'busy', type: 'led', pin: 'D13' },
+  { id: 'busy', type: 'led', pin: 'D13', builtin: true },
 ];
 
 export const EXAMPLES: Example[] = [
@@ -34,7 +34,7 @@ export const EXAMPLES: Example[] = [
     id: 'blink-asm',
     title: 'Blink (hand-assembled)',
     summary: '18 words of AVR machine code toggling D13 every ~0.5 s. Runs without any compiler.',
-    parts: [{ id: 'led13', type: 'led', pin: 'D13' }],
+    parts: [{ id: 'led13', type: 'led', pin: 'D13', builtin: true }],
     firmware: async () => blinkProgram(),
   },
   {
@@ -43,7 +43,7 @@ export const EXAMPLES: Example[] = [
     summary: 'Servo library on D9 sweeps the arm base 0–180°; D13 marks the direction.',
     parts: [
       { id: 'base', type: 'servo', pin: 'D9' },
-      { id: 'led13', type: 'led', pin: 'D13' },
+      { id: 'led13', type: 'led', pin: 'D13', builtin: true },
     ],
     firmware: () => hex('servo-sweep'),
   },
