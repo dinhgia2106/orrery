@@ -56,6 +56,19 @@ It borrows URDF's model (links + joints in a tree, child frames placed in the pa
 
 `position` / `rotation` place the shape in the link's own frame (the frame its parent joint defines). `opacity` (0–1) lets a shell show what is mounted inside.
 
+### Features — making printed parts real
+
+`features` turn a primitive link into a part you can print: everything is in the link frame (mm), holes and cuts are subtracted, bosses are added, and the result is one watertight solid (built with [manifold](https://github.com/elalish/manifold)).
+
+| Feature | Meaning |
+|---|---|
+| `{"hole": {"d", "position", "axis", "depth"}}` | Round hole of diameter `d` along local `x`, `y` or `z` (default `y`); through the part unless `depth` is given (then centred on `position`). M3 clearance 3.4 mm, M2 2.4 mm (ISO 273 medium). |
+| `{"cut": {"box", "position", "rotation"}}` | Remove a box. |
+| `{"pocket": {"for", "position", "rotation", "clearance"}}` | A cut-out that fits a real part, through along local Y: `sg90` (body 23.1 × 12.2), `nema17` (φ22 pilot + 4 × φ3.4 on the 31 mm square of the SY42STH38-1684A drawing), `a4988` (20.32 × 15.24), `b3f` (6 × 6). `clearance` per side defaults to 0.2 mm — a printing allowance, not a datasheet value. |
+| `{"add": {"shape", "position", "rotation"}}` | Add material: a boss, rib or tab (any primitive shape). |
+
+The SG90's tab screw-hole spacing is not in a drawing we could read, so the `sg90` pocket is the body outline only: measure your servo and add the two screw holes yourself.
+
 ## Joints
 
 ```json
@@ -88,6 +101,9 @@ It borrows URDF's model (links + joints in a tree, child frames placed in the pa
 Places a bench device on a link; Orrery draws its real model there (SG90, NEMA 17, A4988 carrier, B3F switch, PTV09 pot, LED, resistor, capacitor). `kind` is a shelf kind: `servo`, `stepper`, `a4988`, `button`, `pot`, `led`, `resistor`, `cap`. If the bench has no device with that id, importing adds one; wiring it and writing the sketch are up to you. Real sizes to leave room for: SG90 23.1 × 12.2 × 29 mm (origin of its model: the output shaft axis at the case bottom), NEMA 17 42.3 × 42.3 × 38 mm (origin: shaft axis on the front face, body towards −Z), A4988 carrier 20.3 × 15.2 mm.
 
 ## What Orrery does with it
+
+- **3D lab** (FIG. 2): build or edit the assembly part by part — shapes, poses, joints, drives, features, mounts — drag a selected part's joint with the gizmo (1 mm steps). Parts with features are shown as their exact printable solid.
+- **Make it**: per part, a binary STL in millimetres and an A4 drawing (three views, third-angle projection, overall sizes, feature list, title block); for the whole mechanism, a fabrication package ZIP with `parts/*.stl`, `drawings/*.svg`, `bom.csv` (electronics with part numbers, made parts, hardware), `assembly.json` and a README.
 
 - **3D**: builds the tree, moves joints every frame from the running firmware's servo and stepper angles, draws mounted devices and the wires to them.
 - **Checks**: invalid files are rejected with one message per problem; joints whose drive asks for more than their limits are reported as sitting on a stop.

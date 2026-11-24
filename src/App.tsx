@@ -19,6 +19,8 @@ import {
 } from './lab/project';
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
+import { patchJoint } from './mech/edit';
+import LabPanel from './mech/LabPanel';
 import { aiPrompt, assemblyFromStl, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
 import { parseIntelHex } from './sim/hex';
@@ -95,6 +97,7 @@ export default function App() {
   const [asmText, setAsmText] = useState('');
   const [asmErrors, setAsmErrors] = useState<string[]>([]);
   const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
+  const [labSel, setLabSel] = useState<string | null>(null);
   const electrical = useRef(electricalKey(project));
   const pressStart = useRef(0);
 
@@ -215,8 +218,8 @@ export default function App() {
     }
   };
 
-  const download = (name: string, text: string, type: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type }));
+  const download = (name: string, data: BlobPart, type: string) => {
+    const url = URL.createObjectURL(new Blob([data], { type }));
     Object.assign(document.createElement('a'), { href: url, download: name }).click();
     URL.revokeObjectURL(url);
   };
@@ -515,7 +518,7 @@ export default function App() {
         <nav className="tabs mono">
           {(['wiring', 'code', '3d'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-              {t === 'wiring' ? 'FIG. 1 — WIRING' : t === 'code' ? 'SKETCH.INO' : 'FIG. 2 — 3D BENCH'}
+              {t === 'wiring' ? 'FIG. 1 — WIRING' : t === 'code' ? 'SKETCH.INO' : 'FIG. 2 — 3D LAB'}
               {t === 'code' && stale && <span className="badge">edited</span>}
               {t === 'code' && result && !result.ok && <span className="badge err">errors</span>}
             </button>
@@ -548,8 +551,18 @@ export default function App() {
           {tab === '3d' && (
             <>
               <Suspense fallback={<div className="loading mono">LOADING 3D SCENE…</div>}>
-                <Scene sim={sim} project={project} />
+                <Scene
+                  sim={sim}
+                  project={project}
+                  lab={{
+                    selected: labSel,
+                    onSelect: setLabSel,
+                    onMoveJoint: (id, position) => project.assembly && setProject({ ...project, assembly: patchJoint(project.assembly, id, { position }) }),
+                    onMovePlacement: (placement) => project.assembly && setProject({ ...project, assembly: { ...project.assembly, placement } }),
+                  }}
+                />
               </Suspense>
+              <LabPanel project={project} onAssembly={(a) => setProject({ ...project, assembly: a })} selected={labSel} onSelect={setLabSel} download={download} />
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />
                 <span className="crop tr" />

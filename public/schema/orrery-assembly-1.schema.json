@@ -4,56 +4,210 @@
   "title": "Orrery Assembly Format v1",
   "description": "A mechanism for the Orrery lab: rigid links joined by joints into a tree (like URDF), in millimetres and degrees, with joints driven by bench devices (servo, stepper) or coupled to other joints. Spec: https://github.com/dinhgia2106/orrery/blob/main/docs/assembly-format.md",
   "type": "object",
-  "required": ["format", "version", "name", "units", "links", "joints"],
+  "required": [
+    "format",
+    "version",
+    "name",
+    "units",
+    "links",
+    "joints"
+  ],
   "additionalProperties": false,
   "properties": {
-    "format": { "const": "orrery.assembly" },
-    "version": { "const": 1 },
-    "name": { "type": "string", "minLength": 1 },
-    "description": { "type": "string" },
-    "units": { "const": "mm" },
-    "placement": { "$ref": "#/$defs/vec3", "description": "Where the root link stands on the bench, mm from the Uno's centre (Y up)." },
-    "links": { "type": "array", "minItems": 1, "maxItems": 400, "items": { "$ref": "#/$defs/link" } },
-    "joints": { "type": "array", "items": { "$ref": "#/$defs/joint" } },
-    "mounts": { "type": "array", "items": { "$ref": "#/$defs/mount" } },
+    "format": {
+      "const": "orrery.assembly"
+    },
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "units": {
+      "const": "mm"
+    },
+    "placement": {
+      "$ref": "#/$defs/vec3",
+      "description": "Where the root link stands on the bench, mm from the Uno's centre (Y up)."
+    },
+    "links": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 400,
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    },
+    "joints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/joint"
+      }
+    },
+    "mounts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mount"
+      }
+    },
     "hardware": {
       "type": "array",
       "description": "Fasteners, bearings, tendon line, springs: generic items, no invented part numbers.",
       "items": {
         "type": "object",
-        "required": ["item", "qty"],
+        "required": [
+          "item",
+          "qty"
+        ],
         "additionalProperties": false,
-        "properties": { "item": { "type": "string" }, "qty": { "type": "number", "exclusiveMinimum": 0 }, "note": { "type": "string" } }
+        "properties": {
+          "item": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "note": {
+            "type": "string"
+          }
+        }
       }
     },
-    "notes": { "type": "array", "items": { "type": "string" } }
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
   },
   "$defs": {
-    "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,47}$" },
-    "vec3": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
-    "size": { "type": "number", "exclusiveMinimum": 0, "maximum": 3000 },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,47}$"
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "size": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 3000
+    },
     "shape": {
       "description": "Exactly one primitive or a mesh. Cylinders and capsules run along the local Y axis; capsule h is the straight part between the hemispheres.",
       "oneOf": [
-        { "type": "object", "required": ["box"], "additionalProperties": false, "properties": { "box": { "type": "array", "items": { "$ref": "#/$defs/size" }, "minItems": 3, "maxItems": 3 } } },
-        { "type": "object", "required": ["sphere"], "additionalProperties": false, "properties": { "sphere": { "$ref": "#/$defs/size" } } },
         {
-          "type": "object", "required": ["cylinder"], "additionalProperties": false,
-          "properties": { "cylinder": { "type": "object", "required": ["r", "h"], "additionalProperties": false, "properties": { "r": { "$ref": "#/$defs/size" }, "h": { "$ref": "#/$defs/size" } } } }
+          "type": "object",
+          "required": [
+            "box"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "box": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/size"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
         },
         {
-          "type": "object", "required": ["capsule"], "additionalProperties": false,
-          "properties": { "capsule": { "type": "object", "required": ["r", "h"], "additionalProperties": false, "properties": { "r": { "$ref": "#/$defs/size" }, "h": { "$ref": "#/$defs/size" } } } }
+          "type": "object",
+          "required": [
+            "sphere"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "sphere": {
+              "$ref": "#/$defs/size"
+            }
+          }
         },
         {
-          "type": "object", "required": ["mesh"], "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "cylinder"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cylinder": {
+              "type": "object",
+              "required": [
+                "r",
+                "h"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "r": {
+                  "$ref": "#/$defs/size"
+                },
+                "h": {
+                  "$ref": "#/$defs/size"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "capsule"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "capsule": {
+              "type": "object",
+              "required": [
+                "r",
+                "h"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "r": {
+                  "$ref": "#/$defs/size"
+                },
+                "h": {
+                  "$ref": "#/$defs/size"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "mesh"
+          ],
+          "additionalProperties": false,
           "properties": {
             "mesh": {
-              "type": "object", "additionalProperties": false,
+              "type": "object",
+              "additionalProperties": false,
               "properties": {
-                "url": { "type": "string", "description": "https:// URL or relative path of an STL file in millimetres" },
-                "data": { "type": "string", "description": "data: URL of an STL file (under 4 MB)" },
-                "scale": { "type": "number", "exclusiveMinimum": 0 }
+                "url": {
+                  "type": "string",
+                  "description": "https:// URL or relative path of an STL file in millimetres"
+                },
+                "data": {
+                  "type": "string",
+                  "description": "data: URL of an STL file (under 4 MB)"
+                },
+                "scale": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
               }
             }
           }
@@ -62,47 +216,169 @@
     },
     "link": {
       "type": "object",
-      "required": ["id", "shape"],
+      "required": [
+        "id",
+        "shape"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "label": { "type": "string" },
-        "shape": { "$ref": "#/$defs/shape" },
-        "position": { "$ref": "#/$defs/vec3", "description": "Shape position in the link frame, mm" },
-        "rotation": { "$ref": "#/$defs/vec3", "description": "Shape rotation in the link frame, Euler XYZ degrees" },
-        "material": { "enum": ["PLA", "PETG", "TPU", "ABS", "resin", "aluminium", "steel", "acrylic", "wood", "other"] },
-        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
-        "make": { "enum": ["print", "buy", "cut", "machine"] }
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/shape"
+        },
+        "position": {
+          "$ref": "#/$defs/vec3",
+          "description": "Shape position in the link frame, mm"
+        },
+        "rotation": {
+          "$ref": "#/$defs/vec3",
+          "description": "Shape rotation in the link frame, Euler XYZ degrees"
+        },
+        "material": {
+          "enum": [
+            "PLA",
+            "PETG",
+            "TPU",
+            "ABS",
+            "resin",
+            "aluminium",
+            "steel",
+            "acrylic",
+            "wood",
+            "other"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "make": {
+          "enum": [
+            "print",
+            "buy",
+            "cut",
+            "machine"
+          ]
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/feature"
+          }
+        }
       }
     },
     "joint": {
       "type": "object",
-      "required": ["id", "type", "parent", "child", "position"],
+      "required": [
+        "id",
+        "type",
+        "parent",
+        "child",
+        "position"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["revolute", "prismatic", "fixed"] },
-        "parent": { "$ref": "#/$defs/id" },
-        "child": { "$ref": "#/$defs/id" },
-        "position": { "$ref": "#/$defs/vec3", "description": "Child frame origin in the parent link frame, mm" },
-        "rotation": { "$ref": "#/$defs/vec3", "description": "Child frame rotation, Euler XYZ degrees" },
-        "axis": { "$ref": "#/$defs/vec3", "description": "Motion axis in the child frame (required unless fixed)" },
-        "limits": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[min, max]: degrees (revolute) or mm (prismatic); omit for continuous" },
-        "home": { "type": "number" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "revolute",
+            "prismatic",
+            "fixed"
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/id"
+        },
+        "child": {
+          "$ref": "#/$defs/id"
+        },
+        "position": {
+          "$ref": "#/$defs/vec3",
+          "description": "Child frame origin in the parent link frame, mm"
+        },
+        "rotation": {
+          "$ref": "#/$defs/vec3",
+          "description": "Child frame rotation, Euler XYZ degrees"
+        },
+        "axis": {
+          "$ref": "#/$defs/vec3",
+          "description": "Motion axis in the child frame (required unless fixed)"
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max]: degrees (revolute) or mm (prismatic); omit for continuous"
+        },
+        "home": {
+          "type": "number"
+        },
         "drive": {
           "oneOf": [
             {
-              "type": "object", "required": ["device"], "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "device"
+              ],
+              "additionalProperties": false,
               "properties": {
-                "device": { "$ref": "#/$defs/id", "description": "A servo or stepper listed in mounts" },
-                "from": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Device angle range, default [0, 180]" },
-                "to": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Joint range it maps to, default = from" }
+                "device": {
+                  "$ref": "#/$defs/id",
+                  "description": "A servo or stepper listed in mounts"
+                },
+                "from": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "Device angle range, default [0, 180]"
+                },
+                "to": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "Joint range it maps to, default = from"
+                }
               }
             },
             {
-              "type": "object", "required": ["follow"], "additionalProperties": false,
-              "properties": { "follow": { "$ref": "#/$defs/id" }, "ratio": { "type": "number" }, "offset": { "type": "number" } }
+              "type": "object",
+              "required": [
+                "follow"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "follow": {
+                  "$ref": "#/$defs/id"
+                },
+                "ratio": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                }
+              }
             }
           ]
         }
@@ -110,15 +386,179 @@
     },
     "mount": {
       "type": "object",
-      "required": ["device", "kind", "link", "position"],
+      "required": [
+        "device",
+        "kind",
+        "link",
+        "position"
+      ],
       "additionalProperties": false,
       "properties": {
-        "device": { "$ref": "#/$defs/id", "description": "Bench device id, created on import if missing" },
-        "kind": { "enum": ["servo", "stepper", "a4988", "button", "pot", "led", "resistor", "cap"] },
-        "link": { "$ref": "#/$defs/id" },
-        "position": { "$ref": "#/$defs/vec3" },
-        "rotation": { "$ref": "#/$defs/vec3" }
+        "device": {
+          "$ref": "#/$defs/id",
+          "description": "Bench device id, created on import if missing"
+        },
+        "kind": {
+          "enum": [
+            "servo",
+            "stepper",
+            "a4988",
+            "button",
+            "pot",
+            "led",
+            "resistor",
+            "cap"
+          ]
+        },
+        "link": {
+          "$ref": "#/$defs/id"
+        },
+        "position": {
+          "$ref": "#/$defs/vec3"
+        },
+        "rotation": {
+          "$ref": "#/$defs/vec3"
+        }
       }
+    },
+    "feature": {
+      "description": "Manufacturing feature in the link frame (mm): holes and cuts are subtracted, add is united.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "hole"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "hole": {
+              "type": "object",
+              "required": [
+                "d",
+                "position"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "d": {
+                  "$ref": "#/$defs/size"
+                },
+                "position": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "axis": {
+                  "enum": [
+                    "x",
+                    "y",
+                    "z"
+                  ]
+                },
+                "depth": {
+                  "$ref": "#/$defs/size"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cut"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cut": {
+              "type": "object",
+              "required": [
+                "box",
+                "position"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "box": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/size"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "position": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "rotation": {
+                  "$ref": "#/$defs/vec3"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "pocket"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "pocket": {
+              "type": "object",
+              "required": [
+                "for",
+                "position"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "for": {
+                  "enum": [
+                    "sg90",
+                    "nema17",
+                    "a4988",
+                    "b3f"
+                  ]
+                },
+                "position": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "rotation": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "clearance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "add"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "add": {
+              "type": "object",
+              "required": [
+                "shape",
+                "position"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "shape": {
+                  "$ref": "#/$defs/shape"
+                },
+                "position": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "rotation": {
+                  "$ref": "#/$defs/vec3"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -1,12 +1,13 @@
 // 3D bench. Everything is modelled in millimetres from the datasheet figures in sim/catalog.ts; where a
 // drawing was not readable the position is marked "approx". Only the parts in the current project are drawn,
 // and each model reads its simulated part by id.
-import { Grid, OrbitControls, RoundedBox } from '@react-three/drei';
+import { Grid, OrbitControls, RoundedBox, TransformControls } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { BufferGeometry, CatmullRomCurve3, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, CatmullRomCurve3, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { jointValues, type Assembly, type Joint, type Link, type Mount, type Vec3 } from './mech/assembly';
+import { partMesh } from './mech/fabricate';
 import { DEVICES } from './lab/devices';
 import type { LabSimulation } from './lab/labsim';
 import type { Project } from './lab/project';
@@ -444,10 +445,56 @@ function StlMesh({ src, scale = 1, material }: { src: string; scale?: number; ma
   ) : null;
 }
 
-function LinkShape({ link }: { link: Link }) {
+const solidCache = new Map<string, Promise<BufferGeometry | null>>();
+
+/** The exact printable solid (holes, pockets, bosses) as a flat-shaded geometry, cached by content. */
+function solidGeometry(link: Link): Promise<BufferGeometry | null> {
+  const key = JSON.stringify([link.shape, link.position, link.rotation, link.features]);
+  let p = solidCache.get(key);
+  if (!p) {
+    p = partMesh(link).then((m) => {
+      if (!m) return null;
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(m.positions, 3));
+      g.setIndex(new BufferAttribute(m.triangles, 1));
+      const flat = g.toNonIndexed();
+      flat.computeVertexNormals();
+      return flat;
+    });
+    if (solidCache.size > 200) solidCache.clear();
+    solidCache.set(key, p);
+  }
+  return p;
+}
+
+function SolidMesh({ link, material, onClick }: { link: Link; material: ReactNode; onClick?: (e: { stopPropagation: () => void }) => void }) {
+  const [geo, setGeo] = useState<BufferGeometry | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void solidGeometry(link).then((g) => alive && setGeo(g));
+    return () => {
+      alive = false;
+    };
+  }, [link]);
+  return geo ? (
+    <mesh geometry={geo} castShadow receiveShadow onClick={onClick}>
+      {material}
+    </mesh>
+  ) : null;
+}
+
+function LinkShape({ link, selected, onSelect }: { link: Link; selected?: boolean; onSelect?: (id: string) => void }) {
   const s = link.shape;
+  const onClick = onSelect
+    ? (e: { stopPropagation: () => void }) => {
+        e.stopPropagation();
+        onSelect(link.id);
+      }
+    : undefined;
   const material = (
     <meshStandardMaterial
+      emissive={selected ? '#1c4fa0' : '#000000'}
+      emissiveIntensity={selected ? 0.35 : 0}
       color={link.color ?? MATERIAL_COLOR[link.material ?? 'PLA']}
       roughness={link.material === 'aluminium' || link.material === 'steel' ? 0.35 : 0.75}
       metalness={link.material === 'aluminium' || link.material === 'steel' ? 0.8 : 0.05}
@@ -456,6 +503,7 @@ function LinkShape({ link }: { link: Link }) {
       depthWrite={!(link.opacity !== undefined && link.opacity < 1)}
     />
   );
+  if (link.features?.length && !('mesh' in s)) return <SolidMesh link={link} material={material} onClick={onClick} />;
   let body: ReactNode;
   if ('box' in s) body = <boxGeometry args={s.box} />;
   else if ('sphere' in s) body = <sphereGeometry args={[s.sphere, 32, 24]} />;
@@ -464,16 +512,38 @@ function LinkShape({ link }: { link: Link }) {
   else {
     const src = s.mesh.data ?? s.mesh.url;
     return (
-      <group position={link.position} rotation={rad(link.rotation)}>
+      <group position={link.position} rotation={rad(link.rotation)} onClick={onClick}>
         {src && <StlMesh src={src} scale={s.mesh.scale} material={material} />}
       </group>
     );
   }
   return (
-    <mesh position={link.position} rotation={rad(link.rotation)} castShadow receiveShadow>
+    <mesh position={link.position} rotation={rad(link.rotation)} castShadow receiveShadow onClick={onClick}>
       {body}
       {material}
     </mesh>
+  );
+}
+
+export interface LabControls {
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  onMoveJoint: (jointId: string, position: Vec3) => void;
+  onMovePlacement: (position: Vec3) => void;
+}
+
+const round1 = (v: Vector3): Vec3 => [Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, Math.round(v.z * 10) / 10];
+
+/** A frame the user can drag with a gizmo (1 mm steps); reports its new position on release. */
+function Movable({ position, rotation, active, onMove, children }: { position: Vec3; rotation?: [number, number, number]; active: boolean; onMove: (p: Vec3) => void; children: ReactNode }) {
+  const [obj, setObj] = useState<Group | null>(null);
+  return (
+    <>
+      <group ref={setObj} position={position} rotation={rotation}>
+        {children}
+      </group>
+      {active && obj && <TransformControls object={obj} mode="translate" translationSnap={1} size={0.7} onMouseUp={() => onMove(round1(obj.position))} />}
+    </>
   );
 }
 
@@ -522,7 +592,7 @@ function useJointValues(asm: Assembly, sim: SimRef) {
   };
 }
 
-function JointNode({ joint, render, values }: { joint: Joint; render: (link: string) => ReactNode; values: (frame: number) => Map<string, number> }) {
+function JointNode({ joint, render, values, lab }: { joint: Joint; render: (link: string) => ReactNode; values: (frame: number) => Map<string, number>; lab?: LabControls }) {
   const moving = useRef<Group>(null);
   const axis = useMemo(() => new Vector3(...(joint.axis ?? [0, 0, 1])).normalize(), [joint.axis]);
   useFrame((state) => {
@@ -533,13 +603,13 @@ function JointNode({ joint, render, values }: { joint: Joint; render: (link: str
     else g.position.copy(axis).multiplyScalar(v);
   });
   return (
-    <group position={joint.position} rotation={rad(joint.rotation)}>
+    <Movable position={joint.position} rotation={rad(joint.rotation)} active={lab?.selected === joint.child} onMove={(p) => lab?.onMoveJoint(joint.id, p)}>
       <group ref={moving}>{render(joint.child)}</group>
-    </group>
+    </Movable>
   );
 }
 
-function AssemblyView({ asm, sim }: { asm: Assembly; sim: SimRef }) {
+function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: LabControls }) {
   const values = useJointValues(asm, sim);
   const byParent = useMemo(() => {
     const m = new Map<string, Joint[]>();
@@ -551,7 +621,7 @@ function AssemblyView({ asm, sim }: { asm: Assembly; sim: SimRef }) {
     const link = asm.links.find((l) => l.id === id)!;
     return (
       <>
-        <LinkShape link={link} />
+        <LinkShape link={link} selected={lab?.selected === id} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
         {(asm.mounts ?? [])
           .filter((m) => m.link === id)
           .map((m) => (
@@ -560,12 +630,16 @@ function AssemblyView({ asm, sim }: { asm: Assembly; sim: SimRef }) {
             </group>
           ))}
         {(byParent.get(id) ?? []).map((j) => (
-          <JointNode key={j.id} joint={j} render={render} values={values} />
+          <JointNode key={j.id} joint={j} render={render} values={values} lab={lab} />
         ))}
       </>
     );
   };
-  return <group position={asm.placement ?? [150, 0, 0]}>{render(root.id)}</group>;
+  return (
+    <Movable position={asm.placement ?? [150, 0, 0]} active={lab?.selected === root.id} onMove={(p) => lab?.onMovePlacement(p)}>
+      {render(root.id)}
+    </Movable>
+  );
 }
 
 /** Where a mounted device sits on the bench with every joint at home — used to end its wires. */
@@ -589,12 +663,14 @@ function mountWorld(asm: Assembly, device: string): V3 | null {
 
 const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
 
-export default function Scene({ sim, project }: { sim: SimRef; project: Project }) {
+export default function Scene({ sim, project, lab }: { sim: SimRef; project: Project; lab?: LabControls }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
   const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
   const ucy = uno ? uno.y + DEVICES.uno.h / 2 : DEVICES.uno.h / 2;
   const asm = project.assembly;
+  // look at the bench when there is a board, else at the mechanism (scene units are cm)
+  const focus: V3 = uno || !asm ? [8, 8, 3] : [(asm.placement?.[0] ?? 150) / 10, 3, (asm.placement?.[2] ?? 0) / 10];
   const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
   const place = new Map<string, V3>();
@@ -668,7 +744,7 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
         {boards.map((b) => (
           <Uno key={b.id} at={place.get(b.id)} level={() => sim.current?.builtinLed(b.id) ?? 0} />
         ))}
-        {asm && <AssemblyView asm={asm} sim={sim} />}
+        {asm && <AssemblyView asm={asm} sim={sim} lab={lab} />}
         {nodes}
         {wires}
       </group>
@@ -677,7 +753,7 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
         <shadowMaterial opacity={0.16} />
       </mesh>
       <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
-      <OrbitControls makeDefault target={[8, 8, 3]} maxPolarAngle={Math.PI / 2.05} />
+      <OrbitControls makeDefault target={focus} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>
   );
 }

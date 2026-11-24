@@ -30,6 +30,7 @@ export const SOURCES = {
   pololu1182: { title: 'Pololu #1182 A4988 carrier', url: 'https://www.pololu.com/product/1182' },
   a4988: { title: 'Allegro A4988 datasheet', url: 'https://www.allegromicro.com/-/media/files/datasheets/a4988-datasheet.pdf' },
   pololu2267: { title: 'Pololu #2267 stepper motor (SY42STH38-1684A)', url: 'https://www.pololu.com/product/2267' },
+  sy42Drawing: { title: 'SY42STH38-1684A specification drawing (Songyang, via Pololu)', url: 'https://www.pololu.com/file/0J714/SY42STH38-1684A.pdf' },
   m328: { title: 'Microchip ATmega328P datasheet (7810D)', url: 'https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7810-Automotive-Microcontrollers-ATmega328P_Datasheet.pdf' },
   b3f: { title: 'Omron B3F datasheet', url: 'https://omronfs.omron.com/en_US/ecb/products/pdf/en-b3f.pdf' },
   ptv09: { title: 'Bourns PTV09 datasheet', url: 'https://www.bourns.com/docs/Product-Datasheets/ptv09.pdf' },
@@ -99,13 +100,17 @@ export const SPEC = {
     frameMm: 42.3, // Pololu #2267: 42.3 mm square × 38 mm
     bodyMm: 38,
     shaftDiaMm: 5, // 5 mm "D" shaft
-    shaftLenMmApprox: 24, // approx: shaft length not stated on the Pololu page
+    shaftLenMmApprox: 24, // SY42STH38-1684A drawing: shaft 24 ±1 mm (name kept for existing callers)
+    boltSpacingMm: 31, // drawing: 31 ±0.2 mm square, 4-M3, 4.5 mm deep
+    boltThread: 'M3',
+    boltDepthMm: 4.5,
+    pilotDiaMm: 22, // drawing: φ22 (0 / −0.05) pilot boss
     ratedA: 1.68, // 1.68 A per coil
     holdingTorqueKgfCm: 3.7,
     weightG: 285,
     /**
-     * approx: Pololu publishes no pull-out torque curve for this motor, so the step rate above which
-     * the model loses steps is an estimate, not a datasheet figure.
+     * approx: the SY42STH38-1684A drawing has a pull-out torque curve (24 V, 1.68 A, half step) only as a
+     * graph, so the step rate above which the model loses steps is an estimate, not a value read from it.
      */
     maxStepsPerSecApprox: 1000,
   },

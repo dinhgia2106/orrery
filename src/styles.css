@@ -387,3 +387,36 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .code-pane .board-tabs { margin: 0; }
 .code-pane { display: flex; flex-direction: column; }
 .code-pane .editor { flex: 1; }
+
+/* ── 3D lab panel ── */
+.lab-panel {
+  position: absolute; top: 12px; left: 12px; bottom: 12px; width: 340px; overflow-y: auto; z-index: 5;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(4px);
+  border: 1px solid var(--ink-soft); border-radius: 4px; box-shadow: 0 8px 30px rgba(24, 39, 75, 0.1);
+}
+.lab-title { color: var(--ink); font-size: 11px; letter-spacing: 0.14em; display: flex; align-items: center; gap: 6px; }
+.lab-name, .lab-text { flex: 1; font: 12px var(--sans); border: 0; border-bottom: 1px dashed var(--ink-soft); background: transparent; padding: 2px 4px; min-width: 0; }
+.lab-text { width: 100%; margin-bottom: 4px; }
+.lab-block { border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; background: var(--paper); display: grid; gap: 5px; }
+.lab-block-head { display: flex; justify-content: space-between; align-items: center; color: var(--ink); font-size: 10px; letter-spacing: 0.12em; }
+.lab-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.lab-row button, .lab-block select, .lab-row input[type='color'] {
+  font: 11px var(--mono); padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--paper); cursor: pointer; color: var(--text);
+}
+.lab-row button:hover { border-color: var(--ink); color: var(--ink); }
+.lab-row input[type='color'] { width: 28px; height: 22px; padding: 0 2px; }
+.num { display: inline-flex; align-items: center; gap: 2px; font: 10px var(--mono); color: var(--muted); }
+.num input { width: 52px; font: 11px var(--mono); padding: 2px 3px; border: 1px solid var(--line); border-radius: 2px; background: var(--quartz-2); color: var(--text); }
+.vec { display: flex; align-items: center; gap: 3px; }
+.vec-label { width: 38px; font-size: 10px; color: var(--ink); }
+.vec .num input { width: 50px; }
+.tree { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 2px; }
+.tree li { padding: 2px 6px; cursor: pointer; font-size: 12px; border-bottom: 1px solid var(--quartz); display: flex; gap: 6px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+.tree li:hover { background: var(--quartz); }
+.tree li.on { background: rgba(28, 79, 160, 0.1); color: var(--ink); }
+.joint-tag { margin-left: auto; font-size: 10px; color: var(--ink); }
+.feature { border-left: 2px solid var(--ink-soft); padding-left: 6px; display: grid; gap: 3px; }
+.mount-row { display: grid; gap: 3px; border-left: 2px solid var(--amber); padding-left: 6px; }
+.link-danger { border: 0 !important; background: none !important; color: var(--danger) !important; cursor: pointer; font: 11px var(--mono); }
+.lab-panel .primary { font-size: 12px; }

@@ -14,6 +14,23 @@ export type Shape =
   | { sphere: number }
   | { mesh: { url?: string; data?: string; scale?: number } };
 
+/** Standard cut-outs that fit a real part (sizes from catalog.ts). */
+export type PocketFor = 'sg90' | 'nema17' | 'a4988' | 'b3f';
+
+/**
+ * Manufacturing features applied to a link's shape, in the link frame (mm). Holes and cuts are subtracted,
+ * "add" is united — so a printed part comes out as one watertight solid.
+ */
+export type Feature =
+  /** A round hole of diameter d along the local x, y or z axis; through the part unless depth is given (then centred on position). */
+  | { hole: { d: number; position: Vec3; axis?: 'x' | 'y' | 'z'; depth?: number } }
+  /** Remove a box. */
+  | { cut: { box: Vec3; position: Vec3; rotation?: Vec3 } }
+  /** A pocket that fits a real part, through the part along local Y; clearance per side (default 0.2 mm). */
+  | { pocket: { for: PocketFor; position: Vec3; rotation?: Vec3; clearance?: number } }
+  /** Add material: a boss, rib or tab. */
+  | { add: { shape: Exclude<Shape, { mesh: unknown }>; position: Vec3; rotation?: Vec3 } };
+
 export interface Link {
   id: string;
   /** What it is, in a few words ("index finger, proximal phalanx"). */
@@ -28,6 +45,8 @@ export interface Link {
   opacity?: number;
   /** How it is obtained: printed, bought, cut or machined. */
   make?: 'print' | 'buy' | 'cut' | 'machine';
+  /** Holes, cuts, pockets and bosses (not for mesh shapes). */
+  features?: Feature[];
 }
 
 export type Drive =
@@ -128,6 +147,13 @@ export function validateAssembly(input: unknown): ValidationResult {
     if (l.rotation !== undefined && !isVec(l.rotation)) errors.push(`${where}: "rotation" must be [rx, ry, rz] in degrees`);
     if (l.opacity !== undefined && (!isNum(l.opacity) || l.opacity < 0 || l.opacity > 1)) errors.push(`${where}: "opacity" must be 0–1`);
     if (l.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(String(l.color))) errors.push(`${where}: "color" must be #rrggbb`);
+    if (l.features !== undefined) {
+      if (!Array.isArray(l.features)) errors.push(`${where}: "features" must be a list`);
+      else {
+        if (l.shape && 'mesh' in l.shape && l.features.length) errors.push(`${where}: features apply to primitive shapes, not meshes`);
+        l.features.forEach((f, k) => errors.push(...featureErrors(f).map((e) => `${where} features[${k}]: ${e}`)));
+      }
+    }
   });
 
   const jointIds = new Set<string>();
@@ -226,6 +252,47 @@ export function validateAssembly(input: unknown): ValidationResult {
   return { ok: errors.length === 0, errors, warnings, assembly: errors.length ? undefined : (a as Assembly) };
 }
 
+const POCKETS: PocketFor[] = ['sg90', 'nema17', 'a4988', 'b3f'];
+
+function featureErrors(f: unknown): string[] {
+  const size = (x: unknown) => isNum(x) && x > 0 && x <= MAX_SIZE_MM;
+  if (!f || typeof f !== 'object' || Object.keys(f).length !== 1) return ['must be exactly one of hole, cut, pocket, add'];
+  const x = f as Record<string, Record<string, unknown>>;
+  if ('hole' in x) {
+    const h = x.hole;
+    if (!h || !size(h.d)) return ['hole needs "d" (diameter, mm)'];
+    if (!isVec(h.position)) return ['hole needs "position" [x, y, z]'];
+    if (h.axis !== undefined && !['x', 'y', 'z'].includes(h.axis as string)) return ['hole "axis" must be x, y or z'];
+    if (h.depth !== undefined && !size(h.depth)) return ['hole "depth" must be > 0'];
+    return [];
+  }
+  if ('cut' in x) {
+    const c = x.cut;
+    if (!c || !isVec(c.box) || !(c.box as number[]).every(size)) return ['cut needs "box" [x, y, z] sizes'];
+    if (!isVec(c.position)) return ['cut needs "position"'];
+    if (c.rotation !== undefined && !isVec(c.rotation)) return ['cut "rotation" must be [rx, ry, rz]'];
+    return [];
+  }
+  if ('pocket' in x) {
+    const p = x.pocket;
+    if (!p || !POCKETS.includes(p.for as PocketFor)) return [`pocket "for" must be one of ${POCKETS.join(', ')}`];
+    if (!isVec(p.position)) return ['pocket needs "position"'];
+    if (p.rotation !== undefined && !isVec(p.rotation)) return ['pocket "rotation" must be [rx, ry, rz]'];
+    if (p.clearance !== undefined && !(isNum(p.clearance) && p.clearance >= 0 && p.clearance <= 2)) return ['pocket "clearance" must be 0–2 mm'];
+    return [];
+  }
+  if ('add' in x) {
+    const a = x.add;
+    if (!a || !isVec(a.position)) return ['add needs "position"'];
+    if (a.rotation !== undefined && !isVec(a.rotation)) return ['add "rotation" must be [rx, ry, rz]'];
+    const e = shapeErrors(a.shape);
+    if (e.length) return e.map((m) => `add: ${m}`);
+    if (a.shape && typeof a.shape === 'object' && 'mesh' in (a.shape as object)) return ['add cannot use a mesh'];
+    return [];
+  }
+  return [`unknown feature "${Object.keys(x)[0]}"`];
+}
+
 function shapeErrors(s: unknown): string[] {
   const size = (x: unknown) => isNum(x) && x > 0 && x <= MAX_SIZE_MM;
   if (!s || typeof s !== 'object') return ['"shape" is required'];
@@ -321,6 +388,7 @@ Rules:
 - "joints" connect a parent link to a child link and form a tree with exactly one root. "position"/"rotation" give the child frame in the parent frame. Revolute joints turn about "axis" in degrees within "limits"; prismatic joints slide in mm.
 - Drive a joint with a bench device: {"device":"servo1","from":[0,180],"to":[minDeg,maxDeg]} maps the servo angle to the joint. A stepper's shaft angle is in degrees. Coupled joints (tendons, gears, linkages) use {"follow":"otherJoint","ratio":r,"offset":o}.
 - Every driving device must be listed in "mounts" with its kind (servo = TowerPro SG90, 23.1 × 12.2 × 29 mm; stepper = NEMA 17 SY42STH38-1684A, 42.3 × 42.3 × 38 mm; a4988 = Pololu 1182 driver board, 20.3 × 15.2 mm) and a pose on the link that holds it. Leave room for these real sizes.
+- Make printed parts real: add "features" to a link — {"hole":{"d","position","axis","depth"}} (through unless depth is given), {"cut":{"box","position","rotation"}}, {"pocket":{"for":"sg90"|"nema17"|"a4988"|"b3f","position","rotation","clearance"}} (a cut-out that fits the real part, through along local Y), {"add":{"shape","position","rotation"}} (bosses, ribs). Use 3.4 mm holes for M3 screws, 2.4 mm for M2.
 - List fasteners, bearings, tendon line, springs and other non-electronic parts in "hardware" as {"item","qty","note"} without inventing part numbers.
 - Put assumptions and assembly steps in "notes". Do not claim forces, torques or speeds you have not calculated.
 
