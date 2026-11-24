@@ -4,6 +4,10 @@ import blinkIno from '../../examples/blink/blink.ino?raw';
 import robotArmIno from '../../examples/robot-arm/robot-arm.ino?raw';
 import servoSweepIno from '../../examples/servo-sweep/servo-sweep.ino?raw';
 import stepperIno from '../../examples/stepper-a4988/stepper-a4988.ino?raw';
+import robotHandIno from '../../examples/robot-hand/robot-hand.ino?raw';
+import armAssembly from '../../examples/robot-arm/robot-arm.assembly.json';
+import handAssembly from '../../examples/robot-hand/robot-hand.assembly.json';
+import { validateAssembly, type Assembly } from '../mech/assembly';
 import { DEVICES, type DeviceKind, type DeviceProps } from './devices';
 
 export interface Device {
@@ -28,6 +32,8 @@ export interface Project {
   devices: Device[];
   wires: Wire[];
   code: string;
+  /** The 3D mechanism (Orrery Assembly Format), if the bench has one. */
+  assembly?: Assembly;
 }
 
 export const WIRE_COLORS = ['#e53935', '#1f1f1f', '#f28c1a', '#f5d142', '#33c46b', '#3d7bff', '#9b59b6', '#ffffff', '#8d6e63'];
@@ -146,6 +152,39 @@ export const TEMPLATES: Template[] = [
         w('pot1.3', 'uno.5V', '#e53935'),
       ],
       code: robotArmIno,
+      assembly: armAssembly as Assembly,
+    },
+  },
+  {
+    id: 'robot-hand',
+    title: 'Five-finger robot hand',
+    summary: 'Six SG90s on a 5 V bench supply drive tendon fingers and the wrist; pot grips, button turns the wrist.',
+    hex: 'robot-hand',
+    project: {
+      version: 1,
+      name: 'Five-finger robot hand',
+      devices: [
+        UNO,
+        ...[1, 2, 3, 4, 5, 6].map((n): Device => ({ id: `servo${n}`, kind: 'servo', x: 430 + ((n - 1) % 2) * 190, y: -260 + Math.floor((n - 1) / 2) * 95, props: {} })),
+        { id: 'psu1', kind: 'psu', x: 640, y: 120, props: { volts: 5 } },
+        { id: 'button1', kind: 'button', x: 60, y: 360, props: {} },
+        { id: 'pot1', kind: 'pot', x: 200, y: 340, props: {} },
+      ],
+      wires: [
+        ...(['D3', 'D5', 'D6', 'D9', 'D10', 'D11'] as const).flatMap((pin, i) => [
+          w(`servo${i + 1}.SIG`, `uno.${pin}`, '#f28c1a'),
+          w(`servo${i + 1}.V+`, 'psu1.+', '#e53935'),
+          w(`servo${i + 1}.GND`, 'psu1.-', '#1f1f1f'),
+        ]),
+        w('psu1.-', 'uno.GND1', '#1f1f1f'),
+        w('button1.1', 'uno.D2', '#f5d142'),
+        w('button1.3', 'uno.GND2', '#1f1f1f'),
+        w('pot1.1', 'uno.GND2', '#1f1f1f'),
+        w('pot1.W', 'uno.A0', '#ffffff'),
+        w('pot1.3', 'uno.5V', '#e53935'),
+      ],
+      code: robotHandIno,
+      assembly: handAssembly as Assembly,
     },
   },
 ];
@@ -197,6 +236,7 @@ export function parseProject(text: string): Project {
     devices: devices.map((d) => ({ id: d.id, kind: d.kind, x: d.x, y: d.y, props: { ...(d.props ?? {}) } })),
     wires: wires.map((x) => ({ id: typeof x.id === 'string' ? x.id : newWireId(), a: x.a, b: x.b, color: typeof x.color === 'string' ? x.color : '#3d7bff' })),
     code: raw.code.slice(0, 200_000),
+    assembly: raw.assembly === undefined ? undefined : validateAssembly(raw.assembly).assembly,
   };
 }
 

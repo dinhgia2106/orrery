@@ -1,0 +1,223 @@
+{
+  "format": "orrery.assembly",
+  "version": 1,
+  "units": "mm",
+  "name": "Two-joint robot arm",
+  "description": "SG90 turns a printed turntable (base yaw); a NEMA 17 on a face-mount bracket swings a printed link (elbow).",
+  "placement": [
+    150,
+    0,
+    -10
+  ],
+  "links": [
+    {
+      "id": "base",
+      "label": "base plate",
+      "shape": {
+        "box": [
+          70,
+          6,
+          70
+        ]
+      },
+      "position": [
+        0,
+        3,
+        0
+      ],
+      "material": "PLA",
+      "make": "print",
+      "color": "#c9d3e2"
+    },
+    {
+      "id": "turntable",
+      "label": "turntable on the servo horn",
+      "shape": {
+        "cylinder": {
+          "r": 32,
+          "h": 4
+        }
+      },
+      "position": [
+        0,
+        2,
+        0
+      ],
+      "material": "PLA",
+      "make": "print",
+      "color": "#c9d3e2"
+    },
+    {
+      "id": "bracket",
+      "label": "motor face-mount bracket",
+      "shape": {
+        "box": [
+          50,
+          72.3,
+          8
+        ]
+      },
+      "position": [
+        0,
+        40.15,
+        23.0
+      ],
+      "material": "PLA",
+      "make": "print",
+      "color": "#c9d3e2"
+    },
+    {
+      "id": "link",
+      "label": "forearm link on the motor shaft",
+      "shape": {
+        "box": [
+          110,
+          12,
+          6
+        ]
+      },
+      "position": [
+        50,
+        0,
+        0
+      ],
+      "material": "PLA",
+      "make": "print",
+      "color": "#c9d3e2"
+    },
+    {
+      "id": "tip",
+      "label": "end effector",
+      "shape": {
+        "sphere": 8
+      },
+      "material": "PLA",
+      "make": "print",
+      "color": "#2f63c0"
+    }
+  ],
+  "joints": [
+    {
+      "id": "yaw",
+      "type": "revolute",
+      "parent": "base",
+      "child": "turntable",
+      "position": [
+        0,
+        37,
+        0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "limits": [
+        -90,
+        90
+      ],
+      "drive": {
+        "device": "servo1",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -90,
+          90
+        ]
+      }
+    },
+    {
+      "id": "bracket_fix",
+      "type": "fixed",
+      "parent": "turntable",
+      "child": "bracket",
+      "position": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "elbow",
+      "type": "revolute",
+      "parent": "bracket",
+      "child": "link",
+      "position": [
+        0,
+        55.15,
+        41.0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "drive": {
+        "device": "stepper1",
+        "from": [
+          0,
+          90
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "tip_fix",
+      "type": "fixed",
+      "parent": "link",
+      "child": "tip",
+      "position": [
+        105,
+        0,
+        0
+      ]
+    }
+  ],
+  "mounts": [
+    {
+      "device": "servo1",
+      "kind": "servo",
+      "link": "base",
+      "position": [
+        0,
+        6,
+        0
+      ]
+    },
+    {
+      "device": "stepper1",
+      "kind": "stepper",
+      "link": "turntable",
+      "position": [
+        0,
+        55.15,
+        19.0
+      ]
+    }
+  ],
+  "hardware": [
+    {
+      "item": "M3 × 8 screw (motor face mount)",
+      "qty": 4
+    },
+    {
+      "item": "M2 screw (servo tabs)",
+      "qty": 2,
+      "note": "usually supplied with the SG90"
+    },
+    {
+      "item": "5 mm D-shaft hub or set-screw coupler",
+      "qty": 1,
+      "note": "joins the link to the motor shaft"
+    }
+  ],
+  "notes": [
+    "Kinematics only: joint angles follow the servo and the stepper; loads, torques and deflection are not simulated.",
+    "The stepper rides on the servo's turntable; in a real build carry the weight on a bearing, not on the servo shaft."
+  ]
+}

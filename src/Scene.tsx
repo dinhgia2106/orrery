@@ -3,8 +3,10 @@
 // and each model reads its simulated part by id.
 import { Grid, OrbitControls, RoundedBox } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useMemo, useRef, type MutableRefObject, type ReactNode } from 'react';
-import { CatmullRomCurve3, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { BufferGeometry, CatmullRomCurve3, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { jointValues, type Assembly, type Joint, type Link, type Mount, type Vec3 } from './mech/assembly';
 import { DEVICES } from './lab/devices';
 import type { LabSimulation } from './lab/labsim';
 import type { Project } from './lab/project';
@@ -15,7 +17,6 @@ type SimRef = MutableRefObject<LabSimulation | null>;
 type V3 = [number, number, number];
 
 const DEG = Math.PI / 180;
-const PRINTED = '#c9d3e2'; // custom 3D-printed parts (not in the BOM)
 
 // ───────────────────────── Arduino UNO R3 ─────────────────────────
 
@@ -419,39 +420,171 @@ function Wire({ from, to, color, lift = 18 }: { from: V3; to: V3; color: string;
 
 // ───────────────────────── Layout ─────────────────────────
 
-/** Two-joint arm: SG90 turns a printed turntable, a NEMA 17 on a printed bracket swings the link. */
-function Arm({ servoAngle, stepAngle }: { servoAngle: () => number; stepAngle: () => number }) {
-  const { frameMm: F, bodyMm: B } = SPEC.nema17;
-  return (
-    <group rotation={[0, -0.6, 0]}>
-      <RoundedBox args={[70, 6, 70]} radius={2} position={[0, 3, 0]} castShadow receiveShadow>
-        <meshStandardMaterial color={PRINTED} roughness={0.8} />
-      </RoundedBox>
-      <group position={[0, 6, 0]}>
-        <Sg90 angleRef={servoAngle}>
-          <mesh position={[0, 4, 0]} castShadow>
-            <cylinderGeometry args={[32, 32, 4, 64]} />
-            <meshStandardMaterial color={PRINTED} roughness={0.8} />
-          </mesh>
-          {/* face-mount bracket: the motor bolts to its front face, 30 mm above the turntable */}
-          <RoundedBox args={[50, 30 + F, 8]} radius={1.5} position={[0, 6 + (30 + F) / 2, B / 2 + 4]} castShadow>
-            <meshStandardMaterial color={PRINTED} roughness={0.8} />
-          </RoundedBox>
-          <group position={[0, 6 + 30 + F / 2, B / 2]}>
-            <Nema17 angleRef={stepAngle}>
-              <RoundedBox args={[110, 12, 6]} radius={2} position={[50, 0, SPEC.nema17.shaftLenMmApprox - 2]} castShadow>
-                <meshStandardMaterial color={PRINTED} roughness={0.8} />
-              </RoundedBox>
-              <mesh position={[105, 0, SPEC.nema17.shaftLenMmApprox - 2]} castShadow>
-                <sphereGeometry args={[8, 32, 32]} />
-                <meshStandardMaterial color="#2f63c0" metalness={0.2} roughness={0.35} />
-              </mesh>
-            </Nema17>
-          </group>
-        </Sg90>
+// ───────────────────────── Assembly (Orrery Assembly Format) ─────────────────────────
+
+const rad = (v?: Vec3): [number, number, number] => (v ? [v[0] * DEG, v[1] * DEG, v[2] * DEG] : [0, 0, 0]);
+const MATERIAL_COLOR: Record<string, string> = { PLA: '#d9dee6', PETG: '#cfe0ea', TPU: '#3a3d42', ABS: '#e9e6df', resin: '#cfd2d6', aluminium: '#b9c0c8', steel: '#9aa2aa', acrylic: '#dfeef5', wood: '#c49a6c', other: '#c9ccd0' };
+
+function StlMesh({ src, scale = 1, material }: { src: string; scale?: number; material: ReactNode }) {
+  const [geo, setGeo] = useState<BufferGeometry | null>(null);
+  useEffect(() => {
+    let alive = true;
+    new STLLoader().load(src, (g) => {
+      g.computeVertexNormals();
+      if (alive) setGeo(g);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [src]);
+  return geo ? (
+    <mesh geometry={geo} scale={scale} castShadow>
+      {material}
+    </mesh>
+  ) : null;
+}
+
+function LinkShape({ link }: { link: Link }) {
+  const s = link.shape;
+  const material = (
+    <meshStandardMaterial
+      color={link.color ?? MATERIAL_COLOR[link.material ?? 'PLA']}
+      roughness={link.material === 'aluminium' || link.material === 'steel' ? 0.35 : 0.75}
+      metalness={link.material === 'aluminium' || link.material === 'steel' ? 0.8 : 0.05}
+      transparent={link.opacity !== undefined && link.opacity < 1}
+      opacity={link.opacity ?? 1}
+      depthWrite={!(link.opacity !== undefined && link.opacity < 1)}
+    />
+  );
+  let body: ReactNode;
+  if ('box' in s) body = <boxGeometry args={s.box} />;
+  else if ('sphere' in s) body = <sphereGeometry args={[s.sphere, 32, 24]} />;
+  else if ('cylinder' in s) body = <cylinderGeometry args={[s.cylinder.r, s.cylinder.r, s.cylinder.h, 40]} />;
+  else if ('capsule' in s) body = <capsuleGeometry args={[s.capsule.r, s.capsule.h, 8, 24]} />;
+  else {
+    const src = s.mesh.data ?? s.mesh.url;
+    return (
+      <group position={link.position} rotation={rad(link.rotation)}>
+        {src && <StlMesh src={src} scale={s.mesh.scale} material={material} />}
       </group>
+    );
+  }
+  return (
+    <mesh position={link.position} rotation={rad(link.rotation)} castShadow receiveShadow>
+      {body}
+      {material}
+    </mesh>
+  );
+}
+
+/** The bench device a mount places on a link, with its live state. */
+function MountedDevice({ mount, sim }: { mount: Mount; sim: SimRef }) {
+  const id = mount.device;
+  switch (mount.kind) {
+    case 'servo':
+      return <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
+    case 'stepper':
+      return <Nema17 angleRef={() => sim.current?.motorAngle(id) ?? 0} />;
+    case 'a4988':
+      return <A4988Carrier />;
+    case 'button':
+      return <TactSwitch pressedRef={() => sim.current?.buttons.get(id)?.pressed ?? false} />;
+    case 'pot':
+      return <Pot valueRef={() => sim.current?.pots.get(id)?.value ?? 0.5} />;
+    case 'led':
+      return <Led5mm color="#ff3b30" levelRef={() => sim.current?.ledLevel(id) ?? 0} />;
+    case 'resistor':
+      return <Resistor3D ohms={220} />;
+    case 'cap':
+      return <Cap3D />;
+    default:
+      return null;
+  }
+}
+
+/** Reads the device angles once per frame and shares the joint values with every joint. */
+function useJointValues(asm: Assembly, sim: SimRef) {
+  const cache = useRef({ frame: -1, values: new Map<string, number>() });
+  return (frame: number) => {
+    if (cache.current.frame !== frame) {
+      const s = sim.current;
+      cache.current = {
+        frame,
+        values: jointValues(asm, (d) => {
+          if (!s) return undefined;
+          const servo = s.servos.get(d);
+          if (servo) return servo.angle;
+          return asm.mounts?.some((m) => m.device === d && m.kind === 'stepper') ? s.motorAngle(d) : undefined;
+        }),
+      };
+    }
+    return cache.current.values;
+  };
+}
+
+function JointNode({ joint, render, values }: { joint: Joint; render: (link: string) => ReactNode; values: (frame: number) => Map<string, number> }) {
+  const moving = useRef<Group>(null);
+  const axis = useMemo(() => new Vector3(...(joint.axis ?? [0, 0, 1])).normalize(), [joint.axis]);
+  useFrame((state) => {
+    const g = moving.current;
+    if (!g || joint.type === 'fixed') return;
+    const v = values(state.clock.elapsedTime).get(joint.id) ?? 0;
+    if (joint.type === 'revolute') g.quaternion.setFromAxisAngle(axis, v * DEG);
+    else g.position.copy(axis).multiplyScalar(v);
+  });
+  return (
+    <group position={joint.position} rotation={rad(joint.rotation)}>
+      <group ref={moving}>{render(joint.child)}</group>
     </group>
   );
+}
+
+function AssemblyView({ asm, sim }: { asm: Assembly; sim: SimRef }) {
+  const values = useJointValues(asm, sim);
+  const byParent = useMemo(() => {
+    const m = new Map<string, Joint[]>();
+    for (const j of asm.joints) m.set(j.parent, [...(m.get(j.parent) ?? []), j]);
+    return m;
+  }, [asm]);
+  const root = asm.links.find((l) => !asm.joints.some((j) => j.child === l.id))!;
+  const render = (id: string): ReactNode => {
+    const link = asm.links.find((l) => l.id === id)!;
+    return (
+      <>
+        <LinkShape link={link} />
+        {(asm.mounts ?? [])
+          .filter((m) => m.link === id)
+          .map((m) => (
+            <group key={m.device} position={m.position} rotation={rad(m.rotation)}>
+              <MountedDevice mount={m} sim={sim} />
+            </group>
+          ))}
+        {(byParent.get(id) ?? []).map((j) => (
+          <JointNode key={j.id} joint={j} render={render} values={values} />
+        ))}
+      </>
+    );
+  };
+  return <group position={asm.placement ?? [150, 0, 0]}>{render(root.id)}</group>;
+}
+
+/** Where a mounted device sits on the bench with every joint at home — used to end its wires. */
+function mountWorld(asm: Assembly, device: string): V3 | null {
+  const m = asm.mounts?.find((x) => x.device === device);
+  if (!m) return null;
+  const parentJoint = new Map(asm.joints.map((j) => [j.child, j]));
+  const local = (pos?: Vec3, rot?: Vec3) => new Matrix4().compose(new Vector3(...(pos ?? [0, 0, 0])), new Quaternion().setFromEuler(new Euler(...rad(rot))), new Vector3(1, 1, 1));
+  let mat = local(m.position, m.rotation);
+  let link = m.link;
+  for (let guard = 0; guard < 400; guard++) {
+    const j = parentJoint.get(link);
+    if (!j) break;
+    mat = local(j.position, j.rotation).multiply(mat);
+    link = j.parent;
+  }
+  mat = local(asm.placement ?? [150, 0, 0]).multiply(mat);
+  const p = new Vector3().setFromMatrixPosition(mat);
+  return [p.x, p.y + 4, p.z];
 }
 
 const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
@@ -460,9 +593,8 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
   const uno = project.devices.find((d) => d.kind === 'uno')!;
   const ucx = uno.x + DEVICES.uno.w / 2;
   const ucy = uno.y + DEVICES.uno.h / 2;
-  const servo = project.devices.find((d) => d.kind === 'servo');
-  const motor = project.devices.find((d) => d.kind === 'stepper');
-  const arm = servo && motor ? { servo, motor } : null;
+  const asm = project.assembly;
+  const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
   const place = new Map<string, V3>();
   for (const d of project.devices) {
@@ -470,11 +602,11 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
     const def = DEVICES[d.kind];
     place.set(d.id, [(d.x + def.w / 2 - ucx) / SPREAD, 0, (d.y + def.h / 2 - ucy) / SPREAD]);
   }
-  if (arm) place.set(arm.motor.id, place.get(arm.servo.id)!);
 
   const anchor = (ref: string): V3 | null => {
     const [id, pin] = ref.split('.');
     if (id === 'uno') return pinWorld(pin);
+    if (asm && mounted.has(id)) return mountWorld(asm, id);
     const at = place.get(id);
     if (!at) return null;
     const d = project.devices.find((x) => x.id === id)!;
@@ -486,12 +618,11 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
   const nodes: ReactNode[] = [];
   for (const d of project.devices) {
     const at = place.get(d.id);
-    if (!at) continue;
+    if (!at || mounted.has(d.id)) continue;
     const id = d.id;
     let body: ReactNode = null;
-    if (d.kind === 'servo') body = arm?.servo.id === id ? <Arm servoAngle={() => sim.current?.servos.get(id)?.angle ?? 90} stepAngle={() => sim.current?.motorAngle(arm.motor.id) ?? 0} /> : <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
+    if (d.kind === 'servo') body = <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
     else if (d.kind === 'stepper') {
-      if (arm?.motor.id === id) continue;
       body = (
         <group position={[0, SPEC.nema17.frameMm / 2, 0]}>
           <Nema17 angleRef={() => sim.current?.motorAngle(id) ?? 0}>
@@ -531,6 +662,7 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
       <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
       <group scale={0.1}>
         <Uno level={() => sim.current?.builtinLed() ?? 0} />
+        {asm && <AssemblyView asm={asm} sim={sim} />}
         {nodes}
         {wires}
       </group>

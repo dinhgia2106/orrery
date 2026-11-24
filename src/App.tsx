@@ -17,6 +17,7 @@ import {
 } from './lab/project';
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
+import { aiPrompt, assemblyFromStl, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
 import { parseIntelHex } from './sim/hex';
 
@@ -76,6 +77,10 @@ export default function App() {
   const [result, setResult] = useState<CompileResult | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [serialIn, setSerialIn] = useState('');
+  const [asmDialog, setAsmDialog] = useState(false);
+  const [asmText, setAsmText] = useState('');
+  const [asmErrors, setAsmErrors] = useState<string[]>([]);
+  const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
   const electrical = useRef(electricalKey(project));
   const pressStart = useRef(0);
 
@@ -214,6 +219,86 @@ export default function App() {
     setSelection(null);
   };
 
+  /** Put a validated assembly on the bench and add any device it mounts that the bench lacks. */
+  const installAssembly = (asm: Assembly) => {
+    const devices = [...project.devices];
+    const added: string[] = [];
+    for (const m of asm.mounts ?? []) {
+      const existing = devices.find((d) => d.id === m.device);
+      if (existing && existing.kind !== m.kind) {
+        setNotice(`Cannot import: the bench already has "${m.device}" as a ${existing.kind}, the mechanism mounts a ${m.kind}.`);
+        return false;
+      }
+      if (!existing) {
+        const d = newDevice(m.kind, devices, 420 + (added.length % 3) * 170, -260 + Math.floor(added.length / 3) * 100);
+        devices.push({ ...d, id: m.device });
+        added.push(m.device);
+      }
+    }
+    update({ ...project, devices, assembly: asm }, true);
+    setNotice(`Mechanism "${asm.name}" is on the bench${added.length ? `; added ${added.join(', ')} — wire them in FIG. 1` : ''}.`);
+    setTab('3d');
+    return true;
+  };
+
+  const importAssemblyText = (text: string) => {
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      setAsmErrors([`not valid JSON: ${(e as Error).message}`]);
+      return;
+    }
+    const r = validateAssembly(json);
+    setAsmErrors([...r.errors, ...r.warnings.map((w) => `note: ${w}`)]);
+    if (r.ok && r.assembly && installAssembly(r.assembly)) {
+      setAsmDialog(false);
+      setAsmText('');
+    }
+  };
+
+  const importMechanismFile = async (file: File) => {
+    if (/\.stl$/i.test(file.name)) {
+      if (file.size > 4 * 1024 * 1024) return setNotice(`${file.name} is over 4 MB; simplify the mesh first.`);
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result));
+        fr.onerror = () => rej(fr.error);
+        fr.readAsDataURL(file);
+      });
+      const base = file.name.replace(/\.stl$/i, '');
+      const cur = project.assembly;
+      if (!cur) return void installAssembly(assemblyFromStl(base, dataUrl));
+      let n = 1;
+      while (cur.links.some((l) => l.id === `part${n}`)) n++;
+      const root = cur.links.find((l) => !cur.joints.some((j) => j.child === l.id))!;
+      const next: Assembly = {
+        ...cur,
+        links: [...cur.links, { id: `part${n}`, label: base, shape: { mesh: { data: dataUrl } }, material: 'PLA', make: 'print' }],
+        joints: [...cur.joints, { id: `part${n}_fix`, type: 'fixed', parent: root.id, child: `part${n}`, position: [0, 0, 0] }],
+      };
+      update({ ...project, assembly: next }, true);
+      setNotice(`${file.name} added to "${cur.name}" at the root link; export the JSON to set its position.`);
+      return;
+    }
+    setAsmDialog(true);
+    setAsmText(await file.text());
+    importAssemblyText(await file.text());
+  };
+
+  const schemaUrl = `${window.location.origin}${import.meta.env.BASE_URL}schema/orrery-assembly-1.schema.json`;
+  const copyPrompt = async () => {
+    const example = TEMPLATES.find((t) => t.id === 'robot-arm')!.project.assembly!;
+    const text = aiPrompt(aiRequest, schemaUrl, example);
+    try {
+      await navigator.clipboard.writeText(text);
+      setAsmErrors(['prompt copied — paste it into an AI, then paste its JSON answer below']);
+    } catch {
+      setAsmText(text);
+      setAsmErrors(['clipboard unavailable: the prompt is in the box below, copy it from there']);
+    }
+  };
+
   const restart = () => firmware && boot(project, firmware.program);
   const stale = !!firmware && firmware.code !== null && firmware.code !== project.code;
   const selDevice = selection?.type === 'device' ? project.devices.find((d) => d.id === selection.id) : undefined;
@@ -221,7 +306,17 @@ export default function App() {
   const railMa = snapshot?.railMa ?? 0;
   const limit = SPEC.uno.usbFuseMa;
   const gaugeMax = limit * 1.5;
-  const checks = snapshot?.checks ?? [];
+  const asm = project.assembly;
+  const stops =
+    asm && sim.current && snapshot
+      ? jointsAtStop(asm, (d) => sim.current?.servos.get(d)?.angle ?? (asm.mounts?.some((m) => m.device === d && m.kind === 'stepper') ? sim.current?.motorAngle(d) : undefined))
+      : [];
+  const checks = [
+    ...(snapshot?.checks ?? []),
+    ...stops.map((j) => ({ level: 'warn' as const, msg: `Joint "${j}" is driven past its limit and sits on its mechanical stop.`, device: undefined as string | undefined })),
+  ];
+  const madeParts = (asm?.links ?? []).filter((l) => l.make && l.make !== 'buy');
+  const missingMounts = (asm?.mounts ?? []).filter((m) => !project.devices.some((d) => d.id === m.device));
   const bom = billOfMaterials(project);
   const instruments = project.devices.filter((d) => d.kind === 'button' || d.kind === 'pot');
   const pinRef = (ref: string) => ref.replace(/^(\w+)\./, (_, id: string) => `${refs[id] ?? id}.`);
@@ -319,7 +414,33 @@ export default function App() {
         <p className="muted small">Open takes a saved project (.json) or firmware (.hex). Projects autosave in this browser.</p>
         {notice && <p className="notice small">{notice}</p>}
 
-        <Section n="04" title="Templates" />
+        <Section n="04" title="Mechanism" />
+        {asm ? (
+          <div className="card mech">
+            <strong>{asm.name}</strong>
+            <span className="mono muted small">
+              {asm.links.length} links · {asm.joints.length} joints · {(asm.mounts ?? []).length} mounted devices
+            </span>
+            {missingMounts.length > 0 && <span className="small warn-text">Missing on the bench: {missingMounts.map((m) => m.device).join(', ')}</span>}
+          </div>
+        ) : (
+          <p className="muted small">No mechanism yet. Import an Orrery Assembly (.json), an STL, or ask an AI to write one.</p>
+        )}
+        <div className="file-row">
+          <label className="file-btn">
+            Import
+            <input type="file" accept=".json,.stl" onChange={(e) => e.target.files?.[0] && void importMechanismFile(e.target.files[0])} />
+          </label>
+          <button onClick={() => { setAsmDialog(true); setAsmErrors([]); }}>AI / paste</button>
+          <button disabled={!asm} onClick={() => asm && download(`${asm.name.replace(/[^\w-]+/g, '_')}.assembly.json`, JSON.stringify(asm, null, 2), 'application/json')}>Export</button>
+          <button disabled={!asm} onClick={() => update({ ...project, assembly: undefined }, true)}>Remove</button>
+        </div>
+        <p className="muted small">
+          Format: <a href="https://github.com/dinhgia2106/orrery/blob/main/docs/assembly-format.md" target="_blank" rel="noreferrer">Orrery Assembly v1</a> ·{' '}
+          <a href={schemaUrl} target="_blank" rel="noreferrer">JSON Schema</a>
+        </p>
+
+        <Section n="05" title="Templates" />
         <ul className="examples">
           {TEMPLATES.map((t, i) => (
             <li key={t.id}>
@@ -387,7 +508,7 @@ export default function App() {
       </main>
 
       <aside className="panel right">
-        <Section n="05" title="Inspector" />
+        <Section n="06" title="Inspector" />
         {selDevice ? (
           <div className="card inspector">
             <div className="part-head">
@@ -462,7 +583,7 @@ export default function App() {
 
         {instruments.length > 0 && (
           <>
-            <Section n="06" title="Controls" />
+            <Section n="07" title="Controls" />
             <ul className="parts">
               {instruments.map((d) =>
                 d.kind === 'button' ? (
@@ -495,7 +616,7 @@ export default function App() {
           </>
         )}
 
-        <Section n="07" title="Checks" />
+        <Section n="08" title="Checks" />
         {checks.length ? (
           <ul className="warnings">
             {checks.map((c, i) => (
@@ -517,7 +638,7 @@ export default function App() {
           <p className="ok mono">{snapshot ? '✓ NO PROBLEMS DETECTED' : 'not running'}</p>
         )}
 
-        <Section n="08" title="Power · 5 V rail" />
+        <Section n="09" title="Power · 5 V rail" />
         <div className={`gauge ${railMa > limit ? 'over' : ''}`}>
           <div className="gauge-bar">
             <span className="gauge-fill" style={{ width: `${Math.min(100, (railMa / gaugeMax) * 100)}%` }} />
@@ -533,7 +654,7 @@ export default function App() {
         </div>
         <p className="muted small">Solved from your wiring; the Uno's own draw and servo current are approximations.</p>
 
-        <Section n="09" title="Serial monitor" />
+        <Section n="10" title="Serial monitor" />
         <pre className="serial">{snapshot?.serial || '—'}</pre>
         <form
           className="serial-in"
@@ -547,7 +668,7 @@ export default function App() {
           <button type="submit">Send</button>
         </form>
 
-        <Section n="10" title="Bill of materials" />
+        <Section n="11" title="Bill of materials" />
         <ul className="bom">
           {bom.map((l) => (
             <li key={l.item.key}>
@@ -577,12 +698,75 @@ export default function App() {
             </li>
           ))}
         </ul>
-        <p className="muted small">Not listed: jumper wires, breadboard. Printed arm parts are custom.</p>
+        {asm && (madeParts.length > 0 || (asm.hardware ?? []).length > 0) && (
+          <div className="card mech-bom">
+            <div className="part-head">
+              <span className="ref mono">MECH</span>
+              <strong>{asm.name}</strong>
+            </div>
+            {madeParts.length > 0 && (
+              <table className="mono small">
+                <tbody>
+                  {madeParts.map((l) => {
+                    const [x, y, z] = shapeSize(l.shape);
+                    return (
+                      <tr key={l.id}>
+                        <td>{l.make}</td>
+                        <td>{l.label ?? l.id}</td>
+                        <td>{l.material ?? '—'}</td>
+                        <td>{'mesh' in l.shape ? 'STL' : `${Math.round(x)}×${Math.round(y)}×${Math.round(z)}`}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            {(asm.hardware ?? []).map((h) => (
+              <div key={h.item} className="small">
+                <b className="mono">{h.qty}×</b> {h.item}
+                {h.note && <span className="muted"> — {h.note}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="muted small">Not listed: jumper wires, breadboard.</p>
         <button className="press" onClick={() => download('orrery-bom.csv', bomCsv(bom), 'text/csv')}>
           Export BOM (.csv)
         </button>
         <p className="muted small">Compile helper: {COMPILER_URL}</p>
       </aside>
+
+      {asmDialog && (
+        <div className="modal-back" onClick={() => setAsmDialog(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Import a mechanism">
+            <div className="modal-head">
+              <strong>Mechanism — ask an AI or paste JSON</strong>
+              <button onClick={() => setAsmDialog(false)} aria-label="Close">×</button>
+            </div>
+            <label className="field-col small">
+              <span className="mono">1 · DESCRIBE IT</span>
+              <input value={aiRequest} onChange={(e) => setAiRequest(e.target.value)} placeholder="e.g. a pan-tilt camera mount on two SG90s" />
+            </label>
+            <button onClick={() => void copyPrompt()}>Copy prompt for any AI (rules + example + schema)</button>
+            <label className="field-col small">
+              <span className="mono">2 · PASTE THE ORRERY ASSEMBLY JSON</span>
+              <textarea className="mono" rows={12} value={asmText} onChange={(e) => setAsmText(e.target.value)} spellCheck={false} placeholder='{ "format": "orrery.assembly", "version": 1, ... }' />
+            </label>
+            {asmErrors.length > 0 && (
+              <ul className="asm-errors mono small">
+                {asmErrors.map((e, i) => (
+                  <li key={i} className={e.startsWith('note:') || e.startsWith('prompt') || e.startsWith('clipboard') ? 'note' : ''}>
+                    {e}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button className="primary" onClick={() => importAssemblyText(asmText)} disabled={!asmText.trim()}>
+              Validate &amp; put on the bench
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -359,3 +359,24 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 
 .fig.bottom { top: auto; bottom: 22px; }
 @media (min-width: 981px) { html, body { overflow: hidden; } }
+
+/* ── mechanism ── */
+.mech { display: grid; gap: 4px; padding: 10px 12px; margin-bottom: 8px; }
+.warn-text { color: #9a5b12; }
+.mech-bom { padding: 10px 12px; display: grid; gap: 6px; margin-bottom: 8px; }
+.mech-bom table { border-collapse: collapse; width: 100%; }
+.mech-bom td { padding: 2px 4px; border-bottom: 1px solid var(--line); color: var(--text); }
+.mech-bom td:first-child { color: var(--ink); text-transform: uppercase; font-size: 10px; }
+.modal-back { position: fixed; inset: 0; background: rgba(27, 34, 43, 0.28); display: grid; place-items: center; z-index: 20; padding: 16px; }
+.modal {
+  width: min(680px, 100%); max-height: 90vh; overflow: auto; display: grid; gap: 10px; padding: 16px 18px;
+  background: var(--blueprint), var(--paper); border: 1.5px solid var(--ink); border-radius: 4px; box-shadow: 0 20px 60px rgba(24, 39, 75, 0.25);
+}
+.modal > button:not(.primary) { padding: 8px; border: 1px solid var(--ink); color: var(--ink); background: var(--paper); border-radius: 3px; cursor: pointer; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; color: var(--ink); }
+.modal-head button { border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+.field-col { display: grid; gap: 4px; color: var(--ink); }
+.field-col input, .field-col textarea { font: 12px var(--mono); padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--paper); color: var(--text); resize: vertical; }
+.asm-errors { margin: 0; padding: 8px 10px 8px 24px; color: var(--danger); background: rgba(194, 65, 45, 0.05); border: 1px solid rgba(194, 65, 45, 0.3); border-radius: 3px; display: grid; gap: 3px; }
+.asm-errors li.note { color: var(--ink); }
+.app > * { min-height: 0; }

@@ -14,7 +14,18 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 4. **Run** — the firmware runs on an emulated ATmega328P; the bench circuit is solved from your wiring (DC nodal analysis) every time an output pin changes, so inputs see real voltages: pull-ups, dividers, an open button, a floating pin.
 5. **3D bench** (FIG. 2) — the same project at real scale, laid out like your wiring view.
 
-Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Four templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm) come wired and with prebuilt firmware, so they run even without a compiler.
+Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Five templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand) come wired and with prebuilt firmware, so they run even without a compiler.
+
+### Mechanisms: the Orrery Assembly Format
+
+3D mechanisms are JSON files in the **[Orrery Assembly Format](docs/assembly-format.md)** ([JSON Schema](public/schema/orrery-assembly-1.schema.json)): rigid *links* (box, cylinder, capsule, sphere or your STL, with material and how each is made), *joints* that join them into a tree (revolute, prismatic, fixed, with axis and limits) driven by a bench servo or stepper or *following* another joint by a ratio (tendons, gears), *mounts* that build bench devices into a link, and a *hardware* list. It is URDF's model in millimetres and degrees, bound to the bench.
+
+- **Import** an assembly or an STL; devices it mounts that the bench lacks are added, ready to wire.
+- **Ask an AI**: the lab copies a prompt with the rules, an example and the schema; paste the answer back and the validator lists every problem in plain words.
+- The 3D view moves the joints from the running firmware; a drive pushing a joint past its limit is reported; printed parts and hardware join the BOM.
+- Example — what a robot hand needs: [`examples/robot-hand/robot-hand.assembly.json`](examples/robot-hand/robot-hand.assembly.json) (forearm, wrist, palm, 14 phalanges, tendon-coupled finger joints, six SG90s, tendon line, sheaths, return elastics, hinge pins, a wrist bearing).
+
+Kinematics only: masses, forces, torques and collisions are not simulated.
 
 ### Compiling your sketch
 
@@ -74,7 +85,7 @@ Every device is a specific product you can buy; its model uses that product's da
 | Displays | LCD 1602 (I2C), SSD1306 OLED, 7-segment |
 | Power | Battery and regulator models, supply current limits, brown-out |
 | Connectivity | ESP32 WiFi bridged to real MQTT / HTTP / WebSocket servers |
-| Mechanics | Physics engine (joint torque, gravity, collisions), STL / STEP import, sensors that measure the 3D scene |
+| Mechanics | Physics engine (joint torque, gravity, collisions), STEP import, an assembly editor, sensors that measure the 3D scene |
 | Workflow | Breadboard view, hosted compile service, simulation in a Web Worker |
 
 ## Run it
@@ -106,6 +117,7 @@ src/lab/project.ts   project file (devices, wires, code), templates, share links
 src/lab/circuit.ts   nets from wires; DC solver (modified nodal analysis)
 src/lab/labsim.ts    firmware + circuit + part models; wiring checks
 src/lab/Wiring.tsx   wiring canvas;  CodeEditor.tsx  sketch editor;  compiler.ts  helper client
+src/mech/assembly.ts Orrery Assembly Format: types, validator, kinematics, AI prompt (spec: docs/assembly-format.md)
 src/sim/board.ts     Arduino Uno: CPU, timers, ports, ADC, USART (avr8js)
 src/sim/parts.ts     servo, A4988 + stepper, button, potentiometer models
 src/sim/catalog.ts   real parts: MPNs, links and the datasheet figures the models use
