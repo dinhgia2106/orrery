@@ -65,6 +65,10 @@ export default function App() {
     }
   };
 
+  // How long the user held a button, in simulated seconds (wall time × speed).
+  const pressStart = useRef(0);
+  const heldSimSec = () => ((performance.now() - pressStart.current) / 1000) * speed;
+
   const restart = () => {
     if (loaded.current) load(loaded.current.program, loaded.current.parts);
   };
@@ -153,9 +157,12 @@ export default function App() {
                 {part instanceof Button && (
                   <button
                     className="press"
-                    onPointerDown={() => part.press(true)}
-                    onPointerUp={() => part.press(false)}
-                    onPointerLeave={() => part.pressed && part.press(false)}
+                    onPointerDown={() => {
+                      pressStart.current = performance.now();
+                      part.press(true);
+                    }}
+                    onPointerUp={() => part.press(false, heldSimSec())}
+                    onPointerLeave={() => part.pressed && part.press(false, heldSimSec())}
                   >
                     Hold to press
                   </button>

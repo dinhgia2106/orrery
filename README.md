@@ -41,7 +41,7 @@ npm test           # simulator tests (includes real AVR machine code)
 npm run build      # static site in dist/
 ```
 
-The *Blink (hand-assembled)* example is 18 words of AVR machine code and runs with no toolchain. The other examples are Arduino sketches in [`examples/`](examples/); compile them once with [arduino-cli](https://arduino.github.io/arduino-cli/):
+The *Blink (hand-assembled)* example is 18 words of AVR machine code and runs with no toolchain. The other examples are Arduino sketches in [`examples/`](examples/); their compiled `.hex` files are committed in [`public/examples/`](public/examples/), and `npm test` runs each of them through the simulator. After editing a sketch, rebuild them with [arduino-cli](https://arduino.github.io/arduino-cli/):
 
 ```bash
 arduino-cli core install arduino:avr
@@ -67,6 +67,7 @@ src/sim/parts.ts    LED, servo, stepper + A4988, button, potentiometer
 src/sim/engine.ts   wiring, time slicing, power check, snapshots for the UI
 src/sim/hex.ts      Intel HEX reader / writer
 src/sim/demos.ts    hand-assembled Blink
+public/examples/    compiled example firmware (arduino-cli, arduino:avr 1.8.8)
 src/Scene.tsx       3D board and arm (three.js, react-three-fiber)
 src/App.tsx         workbench UI
 examples/           Arduino sketches for the examples

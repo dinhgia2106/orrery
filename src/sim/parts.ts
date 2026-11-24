@@ -167,13 +167,21 @@ export class StepperA4988 implements Part {
   }
 }
 
-/** Push button between a pin and GND, read with INPUT_PULLUP (pressed = LOW). */
+/**
+ * Push button between a pin and GND, read with INPUT_PULLUP (pressed = LOW).
+ * A real press always lasts some time, so a release is held back until simulated time has passed the
+ * press by `holdSec` (and by at least one update) — otherwise a quick UI click whose press and release
+ * land between two simulation frames would never reach the firmware.
+ */
 export class Button implements Part {
   readonly type = 'button';
   readonly inputs: PinName[] = [];
   warnings: string[] = [];
   pressed = false;
   private ctx?: PartContext;
+  private now = 0; // simulated time of the last update
+  private downAt = 0;
+  private releaseAfter?: number; // pending release: hold the pin low for this many simulated seconds
 
   constructor(readonly id: string, readonly pin: PinName) {}
 
@@ -182,9 +190,30 @@ export class Button implements Part {
     ctx.setDigitalInput(this.pin, true);
   }
 
-  press(down: boolean): void {
-    this.pressed = down;
-    this.ctx?.setDigitalInput(this.pin, !down);
+  /** Press (`down`) or release the button; a release keeps the pin low for at least `holdSec` of simulated time. */
+  press(down: boolean, holdSec = 0): void {
+    if (down) {
+      this.pressed = true;
+      this.downAt = this.now;
+      this.releaseAfter = undefined;
+      this.ctx?.setDigitalInput(this.pin, false);
+    } else if (this.pressed) {
+      this.releaseAfter = holdSec;
+      this.tryRelease();
+    }
+  }
+
+  update(t: number): void {
+    this.now = t;
+    this.tryRelease();
+  }
+
+  private tryRelease(): void {
+    if (this.releaseAfter === undefined) return;
+    if (this.now <= this.downAt || this.now - this.downAt < this.releaseAfter) return;
+    this.pressed = false;
+    this.releaseAfter = undefined;
+    this.ctx?.setDigitalInput(this.pin, true);
   }
 
   state(): PartState {
