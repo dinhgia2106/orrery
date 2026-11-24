@@ -30,6 +30,8 @@ Projects autosave in the browser, save/open as `.orrery.json`, and **Share** put
 
 The 3D tab is a lab, not just a view: start a mechanism, add parts (box, cylinder, capsule, sphere, or your STL), set their sizes in millimetres, join them with fixed, revolute or prismatic joints, drive joints from the bench's servos and steppers, and drag a part's joint with the gizmo. **Features** make printed parts real: holes (M3 3.4 mm, M2 2.4 mm — ISO 273 medium), cuts, bosses, and pockets that fit the real parts — SG90 body, NEMA 17 face (φ22 pilot and 4 × M3 on 31 mm, from the SY42STH38-1684A drawing), A4988 carrier, B3F switch. Parts are built as watertight solids with [manifold](https://github.com/elalish/manifold) and shown exactly as they will print.
 
+**Section view**: cut the whole bench with a plane along X, Y or Z (slider, flip) to look inside — pockets, hinge holes, tendon channels and the servos seated in them; cut faces are drawn in red.
+
 **Make it**: each part exports as a binary STL (mm) and an A4 drawing (three views, third-angle projection, overall sizes, feature list, title block); **Fabrication package** puts every part's STL and drawing, the BOM (electronics with part numbers, made parts, hardware), the assembly JSON and a README in one ZIP. Pocket clearance (0.2 mm per side by default) is a printing allowance, not a datasheet value — print a test piece.
 
 Kinematics only: masses, forces, torques and collisions are not simulated.

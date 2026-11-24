@@ -427,3 +427,6 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .bom .part-head { flex-wrap: wrap; }
 .bom .ref { white-space: normal; word-break: break-word; max-width: 100%; }
 .panel.right { overflow-x: hidden; }
+.section-panel { position: absolute; top: 12px; right: 40px; z-index: 5; display: grid; gap: 6px; min-width: 190px; padding: 8px 10px; font-size: 11px; color: var(--ink); background: rgba(255,255,255,0.92); border: 1px solid var(--ink-soft); border-radius: 4px; }
+.section-toggle { display: flex; align-items: center; gap: 6px; letter-spacing: 0.12em; cursor: pointer; }
+.section-panel .lab-row button.on { border-color: var(--ink); color: #fff; background: var(--ink); }

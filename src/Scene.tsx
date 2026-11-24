@@ -2,9 +2,9 @@
 // drawing was not readable the position is marked "approx". Only the parts in the current project are drawn,
 // and each model reads its simulated part by id.
 import { Grid, OrbitControls, RoundedBox, TransformControls } from '@react-three/drei';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { BufferAttribute, BufferGeometry, CatmullRomCurve3, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, CatmullRomCurve3, DoubleSide, Material, Mesh as ThreeMesh, MeshBasicMaterial, MeshStandardMaterial as StdMaterial, Plane, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { jointValues, type Assembly, type Joint, type Link, type Mount, type Vec3 } from './mech/assembly';
 import { partMesh } from './mech/fabricate';
@@ -701,7 +701,75 @@ function mountWorld(asm: Assembly, device: string): V3 | null {
 
 const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
 
-export default function Scene({ sim, project, lab }: { sim: SimRef; project: Project; lab?: LabControls }) {
+/** A section cut through the whole bench: everything on one side of the plane is hidden. */
+export interface Section {
+  on: boolean;
+  axis: 'x' | 'y' | 'z';
+  /** Plane position on the bench, mm. */
+  offset: number;
+  /** Keep the other side. */
+  flip: boolean;
+}
+
+const CUT_COLOR = 'vec4(0.76, 0.25, 0.18, 1.0)';
+
+/** Show the inside of solids where the plane cuts them: back faces drawn in the section colour. */
+function sectionize(m: Material) {
+  if (m.userData.section || !(m instanceof StdMaterial || m instanceof MeshBasicMaterial)) return;
+  m.userData.section = true;
+  m.side = DoubleSide;
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    prev.call(m, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader.replace(/}\s*$/, `  if (!gl_FrontFacing) gl_FragColor = ${CUT_COLOR};\n}`);
+  };
+  m.needsUpdate = true;
+}
+
+function SectionCut({ section }: { section?: Section }) {
+  const { gl, scene } = useThree();
+  const plane = useMemo(() => new Plane(), []);
+  const frame = useRef(0);
+  const on = !!section?.on;
+  const unit = new Vector3(section?.axis === 'x' ? 1 : 0, section?.axis === 'y' ? 1 : 0, section?.axis === 'z' ? 1 : 0);
+  const at = (section?.offset ?? 0) / 10; // scene units are cm
+  useEffect(() => {
+    if (!on) {
+      gl.clippingPlanes = [];
+      return;
+    }
+    // keep the side the normal points to: n·p − n·(at·u) ≥ 0
+    const n = unit.clone().multiplyScalar(section!.flip ? 1 : -1);
+    plane.set(n, -n.dot(unit.clone().multiplyScalar(at)));
+    gl.clippingPlanes = [plane];
+    return () => {
+      gl.clippingPlanes = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, section?.axis, section?.offset, section?.flip, gl, plane]);
+  // parts load asynchronously (printable solids, STL), so keep preparing new materials while the cut is on
+  useFrame(() => {
+    if (!on || frame.current++ % 30) return;
+    scene.traverse((o) => {
+      if ((o as ThreeMesh).isMesh && !o.userData.sectionPlane) {
+        const mat = (o as ThreeMesh).material;
+        (Array.isArray(mat) ? mat : [mat]).forEach(sectionize);
+      }
+    });
+  });
+  if (!on) return null;
+  const rot: [number, number, number] = section!.axis === 'x' ? [0, Math.PI / 2, 0] : section!.axis === 'y' ? [-Math.PI / 2, 0, 0] : [0, 0, 0];
+  const pos = unit.clone().multiplyScalar(at + (section!.flip ? 0.01 : -0.01)).toArray() as V3;
+  if (section!.axis !== 'y') pos[1] = 25;
+  return (
+    <mesh position={pos} rotation={rot} userData={{ sectionPlane: true }} renderOrder={10}>
+      <planeGeometry args={[120, 120]} />
+      <meshBasicMaterial color="#1c4fa0" transparent opacity={0.06} depthWrite={false} side={DoubleSide} clippingPlanes={[]} />
+    </mesh>
+  );
+}
+
+export default function Scene({ sim, project, lab, section }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
   const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
@@ -791,6 +859,7 @@ export default function Scene({ sim, project, lab }: { sim: SimRef; project: Pro
         <shadowMaterial opacity={0.16} />
       </mesh>
       <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
+      <SectionCut section={section} />
       <OrbitControls makeDefault target={frame.target} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>
   );

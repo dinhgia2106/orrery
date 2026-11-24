@@ -26,6 +26,7 @@ import { CATALOG, SPEC } from './sim/catalog';
 import { parseIntelHex } from './sim/hex';
 
 const Scene = lazy(() => import('./Scene'));
+type Section = import('./Scene').Section;
 const STORE_KEY = 'orrery.project.v1';
 type Tab = 'wiring' | 'code' | '3d';
 
@@ -98,6 +99,7 @@ export default function App() {
   const [asmErrors, setAsmErrors] = useState<string[]>([]);
   const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
   const [labSel, setLabSel] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>({ on: false, axis: 'z', offset: 0, flip: false });
   const electrical = useRef(electricalKey(project));
   /** Undo/redo history of the whole project (JSON snapshots), recorded 400 ms after the last change. */
   const history = useRef({ past: [] as string[], future: [] as string[], last: JSON.stringify(project), restoring: false });
@@ -627,6 +629,7 @@ export default function App() {
                 <Scene
                   sim={sim}
                   project={project}
+                  section={section}
                   lab={{
                     selected: labSel,
                     onSelect: setLabSel,
@@ -635,6 +638,7 @@ export default function App() {
                   }}
                 />
               </Suspense>
+              <SectionPanel section={section} onChange={setSection} center={project.assembly?.placement} />
               <LabPanel project={project} onAssembly={(a) => setProject({ ...project, assembly: a })} selected={labSel} onSelect={setLabSel} download={download} />
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />
@@ -928,6 +932,36 @@ function overlaps(d: { kind: DeviceKind; x: number; y: number }, x: number, y: n
   const m = 30;
   const def = DEVICES[d.kind];
   return x < d.x + def.w + m && x + w + m > d.x && y < d.y + def.h + m && y + h + m > d.y;
+}
+
+/** Cut the 3D bench with a plane to look inside parts: pockets, holes, tendon channels, mounted servos. */
+function SectionPanel({ section, onChange, center }: { section: Section; onChange: (s: Section) => void; center?: [number, number, number] }) {
+  const axisIndex = { x: 0, y: 1, z: 2 }[section.axis];
+  const mid = section.axis === 'y' ? 100 : center?.[axisIndex] ?? 0;
+  const set = (patch: Partial<Section>) => onChange({ ...section, ...patch });
+  return (
+    <div className="section-panel mono">
+      <label className="section-toggle">
+        <input type="checkbox" checked={section.on} onChange={(e) => set({ on: e.target.checked, offset: section.on ? section.offset : mid })} /> SECTION
+      </label>
+      {section.on && (
+        <>
+          <div className="lab-row">
+            {(['x', 'y', 'z'] as const).map((a) => (
+              <button key={a} className={section.axis === a ? 'on' : ''} onClick={() => set({ axis: a, offset: a === 'y' ? 100 : center?.[{ x: 0, y: 1, z: 2 }[a]] ?? 0 })}>
+                {a.toUpperCase()}
+              </button>
+            ))}
+            <button onClick={() => set({ flip: !section.flip })}>flip</button>
+          </div>
+          <input type="range" min={mid - 300} max={mid + 300} step={1} value={section.offset} onChange={(e) => set({ offset: Number(e.target.value) })} />
+          <span>
+            {section.axis.toUpperCase()} = {section.offset} mm
+          </span>
+        </>
+      )}
+    </div>
+  );
 }
 
 function BoardTabs({ ids, active, onPick, refs, programmed }: { ids: string[]; active: string; onPick: (id: string) => void; refs: Record<string, string>; programmed: Record<string, unknown> }) {
