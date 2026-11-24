@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
-    "build:examples": "node scripts/build-examples.mjs"
+    "build:examples": "node scripts/build-examples.mjs",
+    "compiler": "node scripts/compile-server.mjs"
   },
   "dependencies": {
     "@react-three/drei": "9.117.3",

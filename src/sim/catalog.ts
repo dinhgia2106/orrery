@@ -29,7 +29,8 @@ export const SOURCES = {
   servoH: { title: 'Arduino Servo library 1.3.0, Servo.h', url: 'https://github.com/arduino-libraries/Servo/blob/master/src/Servo.h' },
   pololu1182: { title: 'Pololu #1182 A4988 carrier', url: 'https://www.pololu.com/product/1182' },
   a4988: { title: 'Allegro A4988 datasheet', url: 'https://www.allegromicro.com/-/media/files/datasheets/a4988-datasheet.pdf' },
-  pololu1200: { title: 'Pololu #1200 stepper motor (SY42STH47-1206A)', url: 'https://www.pololu.com/product/1200' },
+  pololu2267: { title: 'Pololu #2267 stepper motor (SY42STH38-1684A)', url: 'https://www.pololu.com/product/2267' },
+  m328: { title: 'Microchip ATmega328P datasheet (7810D)', url: 'https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7810-Automotive-Microcontrollers-ATmega328P_Datasheet.pdf' },
   b3f: { title: 'Omron B3F datasheet', url: 'https://omronfs.omron.com/en_US/ecb/products/pdf/en-b3f.pdf' },
   ptv09: { title: 'Bourns PTV09 datasheet', url: 'https://www.bourns.com/docs/Product-Datasheets/ptv09.pdf' },
   wp7113id: { title: 'Kingbright WP7113ID datasheet', url: 'https://www.kingbrightusa.com/images/catalog/SPEC/WP7113ID.pdf' },
@@ -46,6 +47,18 @@ export const SPEC = {
     /** approx: the datasheet leaves "Maximum Power Consumption" blank ("xx mA"); placeholder estimate. */
     boardMaApprox: 50,
     builtinLedSeriesOhms: 1000, // schematic: L LED (yellow) fed through 1K from an LMV358 buffer on D13
+    vinMinV: 7, // datasheet: VIN (barrel jack) 7–12 V recommended
+    vinMaxV: 12,
+  },
+  /** ATmega328P I/O pins at VCC = 5 V (Microchip datasheet 7810D, DC characteristics). */
+  m328: {
+    pinAbsMaxMa: 40, // DC current per I/O pin 40.0 mA (absolute maximum)
+    vilFrac: 0.3, // VIL max 0.3 VCC
+    vihFrac: 0.6, // VIH min 0.6 VCC
+    vohAt20mA: 4.1, // VOH 4.1 V at IOH = −20 mA  → ~45 Ω source resistance
+    volAt20mA: 0.8, // VOL 0.8 V at IOL = 20 mA  → ~40 Ω sink resistance
+    pullupMinOhms: 20_000, // RPU 20–50 kΩ
+    pullupMaxOhms: 50_000,
   },
   sg90: {
     lengthMm: 23.1, // SG90 datasheet compilation p.2: 23.1 x 12.2 x 29.0 mm
@@ -70,17 +83,26 @@ export const SPEC = {
     noHeatsinkA: 1, // Pololu #1182: ~1 A per phase without heat sink, 2 A with sufficient cooling
     vmotMinV: 8, // Pololu #1182: motor supply 8–35 V
     vmotMaxV: 35,
-    boardMm: [20.3, 15.2] as [number, number], // approx: 16 pins on a 0.1" grid (8 × 2.54 mm long); width estimated
+    boardMm: [20.32, 15.24] as [number, number], // Pololu #1182 specs: 0.6" × 0.8" (without headers)
+    logicHighFrac: 0.7, // VIN(1) min VDD × 0.7
+    logicLowFrac: 0.3, // VIN(0) max VDD × 0.3
+    vddMinV: 3, // Pololu #1182: logic supply 3–5.5 V
+    vddMaxV: 5.5,
+    wakeMs: 1, // Allegro: after SLEEP goes high, wait 1 ms before STEP
+    ms1PulldownOhms: 100_000, // Allegro / Pololu: MS1 and MS3 100 kΩ pull-down, MS2 50 kΩ
+    ms2PulldownOhms: 50_000,
+    ms3PulldownOhms: 100_000,
+    vmotCapUf: 47, // Pololu #1182: at least 47 µF electrolytic across VMOT and GND
   },
   nema17: {
-    stepsPerRev: 200, // Pololu #1200: 1.8° per step
-    frameMm: 42.3, // Pololu #1200: 42.3 mm square × 48 mm
-    bodyMm: 48,
+    stepsPerRev: 200, // Pololu #2267: 1.8° per step
+    frameMm: 42.3, // Pololu #2267: 42.3 mm square × 38 mm
+    bodyMm: 38,
     shaftDiaMm: 5, // 5 mm "D" shaft
     shaftLenMmApprox: 24, // approx: shaft length not stated on the Pololu page
-    ratedA: 1.2, // 1.2 A per coil
-    holdingTorqueKgfCm: 3.2,
-    weightG: 350,
+    ratedA: 1.68, // 1.68 A per coil
+    holdingTorqueKgfCm: 3.7,
+    weightG: 285,
     /**
      * approx: Pololu publishes no pull-out torque curve for this motor, so the step rate above which
      * the model loses steps is an estimate, not a datasheet figure.
@@ -91,6 +113,7 @@ export const SPEC = {
     bodyMm: 6, // Omron B3F: 6 × 6 mm models
     plungerHeightMm: 4.3, // B3F-1000: plunger height 4.3 mm, operating force 0.98 N, ivory plunger
     bounceMsMax: 5, // Omron B3F: bounce time 5 ms max
+    contactOhms: 0.1, // contact resistance 100 mΩ max (initial)
   },
   ptv09: {
     bodyMm: 9, // Bourns PTV09: 9 mm potentiometer
@@ -130,6 +153,33 @@ export const CATALOG: Record<string, CatalogItem> = {
       'TowerPro gives no current rating (its site says about 0.5–2 A when moving): power it from a separate 5 V supply with a common ground.',
     ],
   },
+  resistor: {
+    key: 'resistor',
+    name: 'Resistor, ¼ W through-hole',
+    manufacturer: 'any (value from the inspector)',
+    mpn: '—',
+    url: 'https://en.wikipedia.org/wiki/Electronic_color_code',
+    datasheet: { title: 'E-series values', url: 'https://en.wikipedia.org/wiki/E_series_of_preferred_numbers' },
+    specs: ['Generic part: pick the value in the inspector'],
+  },
+  cap: {
+    key: 'cap',
+    name: 'Electrolytic capacitor',
+    manufacturer: 'any (≥ 47 µF, rated above VMOT)',
+    mpn: '—',
+    url: SOURCES.pololu1182.url,
+    datasheet: SOURCES.pololu1182,
+    specs: ['Pololu: at least 47 µF across VMOT and GND, close to the driver'],
+  },
+  psu: {
+    key: 'psu',
+    name: 'Bench power supply',
+    manufacturer: 'any adjustable DC supply',
+    mpn: '—',
+    url: SOURCES.pololu1182.url,
+    datasheet: SOURCES.pololu1182,
+    specs: ['Motor side of the A4988: 8–35 V', 'Servos: 4.8–6 V'],
+  },
   a4988: {
     key: 'a4988',
     name: 'A4988 stepper driver carrier',
@@ -142,13 +192,13 @@ export const CATALOG: Record<string, CatalogItem> = {
   },
   nema17: {
     key: 'nema17',
-    name: 'NEMA 17 stepper, 200 steps/rev, 1.2 A',
-    manufacturer: 'SOYO (sold by Pololu as #1200)',
-    mpn: 'SY42STH47-1206A',
-    url: SOURCES.pololu1200.url,
-    datasheet: SOURCES.pololu1200,
-    specs: ['42.3 mm square × 48 mm, 350 g', '1.2 A/coil, 3.3 Ω, 2.8 mH', '3.2 kgf·cm holding torque', '5 mm D shaft'],
-    notes: ['Above ~1 A per phase the A4988 carrier needs a heat sink or air flow.'],
+    name: 'NEMA 17 stepper, bipolar 4-wire, 200 steps/rev',
+    manufacturer: 'SOYO (sold by Pololu as #2267)',
+    mpn: 'SY42STH38-1684A',
+    url: SOURCES.pololu2267.url,
+    datasheet: SOURCES.pololu2267,
+    specs: ['42.3 mm square × 38 mm, 285 g', '1.68 A/coil, 1.65 Ω, 3.2 mH', '3.7 kgf·cm holding torque', '5 mm D shaft'],
+    notes: ['Set the A4988 current limit to ~1 A without a heat sink (the motor is rated 1.68 A).'],
   },
   b3f: {
     key: 'b3f',

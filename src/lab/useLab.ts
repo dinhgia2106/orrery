@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Simulation, type PartSpec, type Snapshot } from './sim/engine';
+import { LabSimulation, type LabSnapshot } from './labsim';
+import type { Project } from './project';
 
 const MAX_FRAME = 0.05; // never simulate more than 50 ms per animation frame
 
-export function useSimulation() {
-  const simRef = useRef<Simulation | null>(null);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+/** Runs a LabSimulation on the main thread, paced by requestAnimationFrame. */
+export function useLab() {
+  const simRef = useRef<LabSimulation | null>(null);
+  const [snapshot, setSnapshot] = useState<LabSnapshot | null>(null);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [realtime, setRealtime] = useState(1);
 
-  const load = useCallback((program: Uint16Array, parts: PartSpec[]) => {
-    simRef.current = new Simulation(program, parts);
-    setSnapshot(simRef.current.snapshot());
-    setRunning(true);
+  const boot = useCallback((project: Project, program: Uint16Array) => {
+    const sim = new LabSimulation(project, program);
+    simRef.current = sim;
+    setSnapshot(sim.snapshot());
+    setRunning(sim.fatal.length === 0);
+  }, []);
+
+  const stop = useCallback(() => {
+    simRef.current = null;
+    setSnapshot(null);
+    setRunning(false);
   }, []);
 
   useEffect(() => {
@@ -45,5 +54,5 @@ export function useSimulation() {
     return () => cancelAnimationFrame(raf);
   }, [running, speed]);
 
-  return { sim: simRef, snapshot, running, setRunning, speed, setSpeed, realtime, load };
+  return { sim: simRef, snapshot, setSnapshot, running, setRunning, speed, setSpeed, realtime, boot, stop };
 }

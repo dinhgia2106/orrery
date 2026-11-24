@@ -106,6 +106,8 @@ export class Servo implements Part {
   angle = 90;
   target = 90;
   pulseUs = 0;
+  /** Whether the servo can follow its signal (powered within range, ground shared with the signal source). */
+  gate: () => boolean = () => true;
   private rise = -1;
   private lastT = 0;
 
@@ -138,6 +140,7 @@ export class Servo implements Part {
       warnOnce(this.warnings, `Servo ${this.id}: pulse ${this.pulseUs.toFixed(0)} µs is outside the 400–2600 µs a hobby servo accepts.`);
       return;
     }
+    if (!this.gate()) return;
     const clamped = Math.min(maxUs, Math.max(minUs, this.pulseUs));
     this.target = ((clamped - minUs) / (maxUs - minUs)) * 180;
   }
@@ -174,8 +177,14 @@ export class StepperA4988 implements Part {
   readonly type = 'stepper';
   readonly inputs: PinName[];
   warnings: string[] = [];
-  position = 0; // in microsteps
+  position = 0; // in full steps (fractional in microstep modes)
   missed = 0;
+  /** Steps the driver ignored because it was in reset, asleep, disabled or unpowered. */
+  ignored = 0;
+  /** +1, or −1 when one coil is wired the other way round (the motor turns backwards). */
+  dirSign = 1;
+  /** Whether a STEP edge moves the shaft right now (driver powered, awake, enabled, coils paired). */
+  gate: () => boolean = () => true;
   private dirHigh = false;
   private dirChangedAt = -1;
   private stepHigh = false;
@@ -215,6 +224,10 @@ export class StepperA4988 implements Part {
     if (this.dirChangedAt >= 0 && (t - this.dirChangedAt) * 1e9 < setupNs) {
       warnOnce(this.warnings, `Stepper ${this.id}: DIR changed ${((t - this.dirChangedAt) * 1e9).toFixed(0)} ns before STEP — the A4988 needs ${setupNs} ns setup time.`);
     }
+    if (!this.gate()) {
+      this.ignored++;
+      return;
+    }
     const minGap = 1 / (this.opts.maxStepsPerSec * this.opts.microsteps);
     if (this.lastStep >= 0 && t - this.lastStep < minGap) {
       this.missed++;
@@ -222,11 +235,11 @@ export class StepperA4988 implements Part {
       return;
     }
     this.lastStep = t;
-    this.position += this.dirHigh ? 1 : -1;
+    this.position += ((this.dirHigh ? 1 : -1) * this.dirSign) / this.opts.microsteps;
   }
 
   get angle(): number {
-    return (this.position / (this.opts.stepsPerRev * this.opts.microsteps)) * 360;
+    return (this.position / this.opts.stepsPerRev) * 360;
   }
 
   /** The carrier's logic side runs from the Uno 5 V (IDD ≤ 8 mA); the motor has its own 8–35 V supply. */
@@ -235,7 +248,7 @@ export class StepperA4988 implements Part {
   }
 
   state(): PartState {
-    return { steps: this.position, angle: Math.round(this.angle * 10) / 10, missed: this.missed };
+    return { steps: Math.round(this.position * 100) / 100, angle: Math.round(this.angle * 10) / 10, missed: this.missed, ignored: this.ignored };
   }
 }
 

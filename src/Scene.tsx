@@ -5,11 +5,13 @@ import { Grid, OrbitControls, RoundedBox } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useMemo, useRef, type MutableRefObject, type ReactNode } from 'react';
 import { CatmullRomCurve3, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { DEVICES } from './lab/devices';
+import type { LabSimulation } from './lab/labsim';
+import type { Project } from './lab/project';
+import { resistorBands } from './lab/Wiring';
 import { SPEC } from './sim/catalog';
-import type { PartSpec, Simulation } from './sim/engine';
-import { Button, Led, Potentiometer, Servo, StepperA4988 } from './sim/parts';
 
-type SimRef = MutableRefObject<Simulation | null>;
+type SimRef = MutableRefObject<LabSimulation | null>;
 type V3 = [number, number, number];
 
 const DEG = Math.PI / 180;
@@ -18,7 +20,7 @@ const PRINTED = '#c9d3e2'; // custom 3D-printed parts (not in the BOM)
 // ───────────────────────── Arduino UNO R3 ─────────────────────────
 
 const UNO = SPEC.uno;
-const UNO_POS: V3 = [-75, 2, 0]; // lifted 2 mm: through-hole leads under the board (approx)
+const UNO_POS: V3 = [0, 2, 0]; // lifted 2 mm: through-hole leads under the board (approx)
 const PCB_TOP = UNO.pcbThicknessMm;
 const HEADER_TOP = PCB_TOP + UNO.headerHeightMm;
 
@@ -67,14 +69,12 @@ function FemaleHeader({ pins, at }: { pins: number; at: V3 }) {
   );
 }
 
-function Uno({ sim, builtinLedId }: { sim: SimRef; builtinLedId?: string }) {
+function Uno({ level }: { level: () => number }) {
   const led = useRef<Mesh>(null);
   useFrame(() => {
     const mat = led.current?.material as MeshStandardMaterial | undefined;
     if (!mat) return;
-    const l = builtinLedId ? sim.current?.part<Led>(builtinLedId) : undefined;
-    const st = l?.state();
-    mat.emissiveIntensity = st ? 0.05 + Math.max(st.on ? 1 : 0, Number(st.brightness)) * 4 : 0.05;
+    mat.emissiveIntensity = 0.05 + level() * 4;
   });
   const { lengthMm: L, widthMm: W } = UNO;
   const right = L / 2 - 5.1;
@@ -327,27 +327,68 @@ function Led5mm({ levelRef, color }: { levelRef: () => number; color: string }) 
   );
 }
 
-/** Generic half-size solderless breadboard — approx dimensions. */
-const BREADBOARD = { pos: [-75, 0, 72] as V3, size: [82, 8.5, 55] as V3 };
-function Breadboard() {
-  const [L, H, W] = BREADBOARD.size;
+/** ¼ W resistor with its colour bands. */
+function Resistor3D({ ohms }: { ohms: number }) {
+  const bands = resistorBands(ohms);
   return (
-    <group position={BREADBOARD.pos}>
-      <RoundedBox args={[L, H, W]} radius={1} position={[0, H / 2, 0]} receiveShadow castShadow>
-        <meshStandardMaterial color="#e6e4dc" roughness={0.8} />
-      </RoundedBox>
-      <mesh position={[0, H + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[L - 4, 2.5]} />
-        <meshStandardMaterial color="#cfcabd" />
+    <group position={[0, 2.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+      <mesh castShadow>
+        <capsuleGeometry args={[1.25, 4, 6, 16]} />
+        <meshStandardMaterial color="#d8c49a" roughness={0.6} />
       </mesh>
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh position={[0, H + 0.02, s * (W / 2 - 3)]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[L - 8, 0.6]} />
-            <meshBasicMaterial color={s < 0 ? '#d33' : '#36c'} />
-          </mesh>
-        </group>
+      {bands.map((c, i) => (
+        <mesh key={i} position={[0, -2.2 + i * 1.3 + (i === 3 ? 0.6 : 0), 0]}>
+          <cylinderGeometry args={[1.3, 1.3, 0.5, 16]} />
+          <meshStandardMaterial color={c} />
+        </mesh>
       ))}
+      <mesh>
+        <cylinderGeometry args={[0.25, 0.25, 14, 6]} />
+        <meshStandardMaterial color="#c9ccd0" metalness={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Radial electrolytic capacitor (size approx). */
+function Cap3D() {
+  return (
+    <group>
+      <mesh position={[0, 6.5, 0]} castShadow>
+        <cylinderGeometry args={[4, 4, 11, 24]} />
+        <meshStandardMaterial color="#1d3e8a" roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 6.5, 3.6]}>
+        <boxGeometry args={[2, 11, 1]} />
+        <meshStandardMaterial color="#c9d3e2" />
+      </mesh>
+    </group>
+  );
+}
+
+/** Bench supply (a generic box; size approx). */
+function Psu3D({ volts }: { volts: number }) {
+  return (
+    <group>
+      <RoundedBox args={[70, 40, 50]} radius={3} position={[0, 20, 0]} castShadow>
+        <meshStandardMaterial color="#d7dbe0" roughness={0.6} />
+      </RoundedBox>
+      <mesh position={[-10, 28, 25.1]}>
+        <planeGeometry args={[36, 12]} />
+        <meshBasicMaterial color="#14301b" />
+      </mesh>
+      <mesh position={[-10 + 18 * Math.min(1, volts / 35) - 9, 28, 25.2]}>
+        <planeGeometry args={[2, 8]} />
+        <meshBasicMaterial color="#56f08a" />
+      </mesh>
+      <mesh position={[18, 12, 25.5]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[3, 3, 3, 16]} />
+        <meshStandardMaterial color="#d33" />
+      </mesh>
+      <mesh position={[28, 12, 25.5]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[3, 3, 3, 16]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
     </group>
   );
 }
@@ -378,16 +419,11 @@ function Wire({ from, to, color, lift = 18 }: { from: V3; to: V3; color: string;
 
 // ───────────────────────── Layout ─────────────────────────
 
-const ON_BOARD = BREADBOARD.size[1];
-const slot = (i: number): V3 => [-110 + i * 22, ON_BOARD, 72]; // breadboard positions for small parts
-
 /** Two-joint arm: SG90 turns a printed turntable, a NEMA 17 on a printed bracket swings the link. */
-function Arm({ sim, servoId, stepperId }: { sim: SimRef; servoId: string; stepperId: string }) {
-  const servoAngle = () => sim.current?.part<Servo>(servoId)?.angle ?? 90;
-  const stepAngle = () => sim.current?.part<StepperA4988>(stepperId)?.angle ?? 0;
+function Arm({ servoAngle, stepAngle }: { servoAngle: () => number; stepAngle: () => number }) {
   const { frameMm: F, bodyMm: B } = SPEC.nema17;
   return (
-    <group position={[45, 0, 0]} rotation={[0, -0.6, 0]}>
+    <group rotation={[0, -0.6, 0]}>
       <RoundedBox args={[70, 6, 70]} radius={2} position={[0, 3, 0]} castShadow receiveShadow>
         <meshStandardMaterial color={PRINTED} roughness={0.8} />
       </RoundedBox>
@@ -418,105 +454,92 @@ function Arm({ sim, servoId, stepperId }: { sim: SimRef; servoId: string; steppe
   );
 }
 
-export default function Scene({ sim, specs }: { sim: SimRef; specs: PartSpec[] }) {
-  const servos = specs.filter((s) => s.type === 'servo');
-  const steppers = specs.filter((s) => s.type === 'stepper');
-  const arm = servos.length > 0 && steppers.length > 0 ? { servo: servos[0].id, stepper: steppers[0].id } : null;
-  const builtin = specs.find((s) => s.type === 'led' && s.builtin && s.pin === 'D13');
-  const small = specs.filter((s) => s.type === 'button' || s.type === 'pot' || (s.type === 'led' && !s.builtin) || s.type === 'stepper');
-  const needsBreadboard = small.length > 0;
+const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
+
+export default function Scene({ sim, project }: { sim: SimRef; project: Project }) {
+  const uno = project.devices.find((d) => d.kind === 'uno')!;
+  const ucx = uno.x + DEVICES.uno.w / 2;
+  const ucy = uno.y + DEVICES.uno.h / 2;
+  const servo = project.devices.find((d) => d.kind === 'servo');
+  const motor = project.devices.find((d) => d.kind === 'stepper');
+  const arm = servo && motor ? { servo, motor } : null;
+
+  const place = new Map<string, V3>();
+  for (const d of project.devices) {
+    if (d.kind === 'uno') continue;
+    const def = DEVICES[d.kind];
+    place.set(d.id, [(d.x + def.w / 2 - ucx) / SPREAD, 0, (d.y + def.h / 2 - ucy) / SPREAD]);
+  }
+  if (arm) place.set(arm.motor.id, place.get(arm.servo.id)!);
+
+  const anchor = (ref: string): V3 | null => {
+    const [id, pin] = ref.split('.');
+    if (id === 'uno') return pinWorld(pin);
+    const at = place.get(id);
+    if (!at) return null;
+    const d = project.devices.find((x) => x.id === id)!;
+    const i = DEVICES[d.kind].pins.findIndex((p) => p.name === pin);
+    const h = d.kind === 'psu' ? 12 : d.kind === 'stepper' ? 4 : d.kind === 'a4988' ? 8 : 3;
+    return [at[0] - 6 + i * 2.54, at[1] + h, at[2] + (d.kind === 'psu' ? 26 : 0)];
+  };
 
   const nodes: ReactNode[] = [];
-  const wires: ReactNode[] = [];
-  let free = 0; // x slots for stand-alone motors
-  small.forEach((s, i) => {
-    const at = slot(i);
-    if (s.type === 'button') {
-      nodes.push(
-        <group key={s.id} position={at}>
-          <TactSwitch pressedRef={() => sim.current?.part<Button>(s.id)?.pressed ?? false} />
-        </group>,
+  for (const d of project.devices) {
+    const at = place.get(d.id);
+    if (!at) continue;
+    const id = d.id;
+    let body: ReactNode = null;
+    if (d.kind === 'servo') body = arm?.servo.id === id ? <Arm servoAngle={() => sim.current?.servos.get(id)?.angle ?? 90} stepAngle={() => sim.current?.motorAngle(arm.motor.id) ?? 0} /> : <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
+    else if (d.kind === 'stepper') {
+      if (arm?.motor.id === id) continue;
+      body = (
+        <group position={[0, SPEC.nema17.frameMm / 2, 0]}>
+          <Nema17 angleRef={() => sim.current?.motorAngle(id) ?? 0}>
+            <RoundedBox args={[22, 6, 2]} radius={1} position={[9, 0, SPEC.nema17.shaftLenMmApprox - 2]} castShadow>
+              <meshStandardMaterial color="#ffb02e" />
+            </RoundedBox>
+          </Nema17>
+        </group>
       );
-      wires.push(<Wire key={`${s.id}-w`} from={pinWorld(s.pin)} to={[at[0] - 3, at[1], at[2] - 6]} color="#f5d142" />);
-      wires.push(<Wire key={`${s.id}-g`} from={pinWorld('GND')} to={[at[0] + 3, at[1], at[2] + 6]} color="#222" lift={10} />);
-    } else if (s.type === 'pot') {
-      nodes.push(
-        <group key={s.id} position={at}>
-          <Pot valueRef={() => sim.current?.part<Potentiometer>(s.id)?.value ?? 0.5} />
-        </group>,
-      );
-      wires.push(<Wire key={`${s.id}-w`} from={pinWorld(s.pin)} to={[at[0], at[1], at[2] - 5]} color="#eaeaea" />);
-      wires.push(<Wire key={`${s.id}-5`} from={pinWorld('5V')} to={[at[0] - 2.54, at[1], at[2] - 5]} color="#d33" lift={12} />);
-    } else if (s.type === 'led') {
-      nodes.push(
-        <group key={s.id} position={at}>
-          <Led5mm color={s.color ?? '#ff3b30'} levelRef={() => {
-            const st = sim.current?.part<Led>(s.id)?.state();
-            return st ? Math.max(st.on ? 1 : 0, Number(st.brightness)) : 0;
-          }} />
-        </group>,
-      );
-      wires.push(<Wire key={`${s.id}-w`} from={pinWorld(s.pin)} to={[at[0], at[1], at[2] - 4]} color="#4fc3f7" />);
-    } else if (s.type === 'stepper') {
-      nodes.push(
-        <group key={`${s.id}-drv`} position={at}>
-          <A4988Carrier />
-        </group>,
-      );
-      wires.push(<Wire key={`${s.id}-s`} from={pinWorld(s.step)} to={[at[0] - 6, at[1] + 6, at[2] - 6.35]} color="#3d7bff" />);
-      wires.push(<Wire key={`${s.id}-d`} from={pinWorld(s.dir)} to={[at[0] - 3.5, at[1] + 6, at[2] - 6.35]} color="#33c46b" />);
-    }
+    } else if (d.kind === 'a4988') body = <A4988Carrier />;
+    else if (d.kind === 'button') body = <TactSwitch pressedRef={() => sim.current?.buttons.get(id)?.pressed ?? false} />;
+    else if (d.kind === 'pot') body = <Pot valueRef={() => sim.current?.pots.get(id)?.value ?? 0.5} />;
+    else if (d.kind === 'led') body = <Led5mm color={d.props.color ?? '#ff3b30'} levelRef={() => sim.current?.ledLevel(id) ?? 0} />;
+    else if (d.kind === 'resistor') body = <Resistor3D ohms={d.props.ohms ?? 220} />;
+    else if (d.kind === 'cap') body = <Cap3D />;
+    else if (d.kind === 'psu') body = <Psu3D volts={d.props.volts ?? 12} />;
+    nodes.push(
+      <group key={id} position={at}>
+        {body}
+      </group>,
+    );
+  }
+
+  const wires = project.wires.map((w) => {
+    const a = anchor(w.a);
+    const b = anchor(w.b);
+    return a && b ? <Wire key={w.id} from={a} to={b} color={w.color} lift={14} /> : null;
   });
 
-  for (const s of servos) {
-    if (arm?.servo === s.id) continue;
-    const x = 20 + free++ * 55;
-    nodes.push(
-      <group key={s.id} position={[x, 0, 0]}>
-        <Sg90 angleRef={() => sim.current?.part<Servo>(s.id)?.angle ?? 90} />
-      </group>,
-    );
-    wires.push(<Wire key={`${s.id}-w`} from={pinWorld(s.pin)} to={[x + 16, 4, 0]} color="#f28c1a" lift={22} />);
-  }
-  for (const s of steppers) {
-    if (arm?.stepper === s.id) continue;
-    const x = 20 + free++ * 55;
-    nodes.push(
-      <group key={s.id} position={[x, SPEC.nema17.frameMm / 2, 0]}>
-        <Nema17 angleRef={() => sim.current?.part<StepperA4988>(s.id)?.angle ?? 0}>
-          <RoundedBox args={[22, 6, 2]} radius={1} position={[9, 0, SPEC.nema17.shaftLenMmApprox - 2]} castShadow>
-            <meshStandardMaterial color="#ffb02e" />
-          </RoundedBox>
-        </Nema17>
-      </group>,
-    );
-  }
-  if (arm) {
-    nodes.push(<Arm key="arm" sim={sim} servoId={arm.servo} stepperId={arm.stepper} />);
-    const s = servos[0];
-    if (s.type === 'servo') wires.push(<Wire key="arm-w" from={pinWorld(s.pin)} to={[45 + 16, 12, 0]} color="#f28c1a" lift={22} />);
-  }
-
   return (
-    <Canvas shadows camera={{ position: [3, 27, 46], fov: 40 }} dpr={[1, 2]} gl={{ alpha: true }}>
+    <Canvas shadows camera={{ position: [10, 32, 52], fov: 40 }} dpr={[1, 2]} gl={{ alpha: true }}>
       <ambientLight intensity={0.75} />
-      <hemisphereLight args={["#ffffff", "#d8dde6", 0.6]} />
+      <hemisphereLight args={['#ffffff', '#d8dde6', 0.6]} />
       <directionalLight position={[8, 16, 10]} intensity={1.7} castShadow shadow-mapSize={[2048, 2048]}>
-        <orthographicCamera attach="shadow-camera" args={[-25, 25, 25, -25, 0.1, 60]} />
+        <orthographicCamera attach="shadow-camera" args={[-35, 35, 35, -35, 0.1, 80]} />
       </directionalLight>
       <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
       <group scale={0.1}>
-        <Uno sim={sim} builtinLedId={builtin?.id} />
-        {needsBreadboard && <Breadboard />}
+        <Uno level={() => sim.current?.builtinLed() ?? 0} />
         {nodes}
         {wires}
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[80, 80]} />
+        <planeGeometry args={[120, 120]} />
         <shadowMaterial opacity={0.16} />
       </mesh>
-      <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={60} fadeStrength={1.5} infiniteGrid />
-      <OrbitControls makeDefault target={[0, 7, 2]} maxPolarAngle={Math.PI / 2.05} />
+      <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
+      <OrbitControls makeDefault target={[8, 8, 3]} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>
   );
 }

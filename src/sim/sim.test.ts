@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ArduinoUno, pinLocation } from './board';
 import { BLINK_ASM_WORDS, blinkProgram } from './demos';
-import { Simulation, billOfMaterials } from './engine';
+import { billOfMaterials } from '../lab/bom';
+import { TEMPLATES, cloneProject } from '../lab/project';
 import { parseIntelHex, toIntelHex } from './hex';
 import { Button, Led, Servo, StepperA4988 } from './parts';
 
@@ -30,14 +31,6 @@ describe('ArduinoUno running real machine code', () => {
     const period = edges[1] - edges[0];
     expect(period).toBeGreaterThan(0.8);
     expect(period).toBeLessThan(1.3);
-  });
-
-  it('drives an LED part through the simulation', () => {
-    const sim = new Simulation(blinkProgram(), [{ id: 'led', type: 'led', pin: 'D13' }]);
-    sim.step(0.3);
-    expect(sim.snapshot().parts.led.on).toBe(true);
-    sim.step(0.5);
-    expect(sim.snapshot().parts.led.on).toBe(false);
   });
 });
 
@@ -111,16 +104,10 @@ describe('Button (Omron B3F)', () => {
 });
 
 describe('bill of materials and rail figures', () => {
-  it('lists a real part number for every wired part, and not the on-board LED', () => {
-    const bom = billOfMaterials([
-      { id: 'base', type: 'servo', pin: 'D9' },
-      { id: 'elbow', type: 'stepper', step: 'D3', dir: 'D4' },
-      { id: 'home', type: 'button', pin: 'D2' },
-      { id: 'knob', type: 'pot', pin: 'A0' },
-      { id: 'busy', type: 'led', pin: 'D13', builtin: true },
-      { id: 'red', type: 'led', pin: 'D7' },
-    ]);
-    expect(bom.map((l) => l.item.mpn)).toEqual(['A000066', 'SG90', '1182', 'SY42STH47-1206A', 'B3F-1000', 'PTV09A-2020F-B103', 'WP7113ID']);
+  it('lists a real part number for every device on the bench', () => {
+    const bom = billOfMaterials(cloneProject(TEMPLATES.find((t) => t.id === 'robot-arm')!.project));
+    expect(bom.map((l) => l.item.mpn)).toEqual(['A000066', 'SG90', '1182', 'SY42STH38-1684A', '—', '—', 'B3F-1000', 'PTV09A-2020F-B103']);
+    expect(bom.find((l) => l.item.key === 'uno')!.refs).toEqual(['U1']);
     expect(bom.every((l) => l.item.datasheet.url.startsWith('https://'))).toBe(true);
   });
 
