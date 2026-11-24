@@ -20,8 +20,9 @@ import {
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
 import { patchJoint } from './mech/edit';
+import { interference, massProperties, type Clash, type MassProps } from './mech/physics';
 import LabPanel from './mech/LabPanel';
-import { aiPrompt, assemblyFromStl, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
+import { aiPrompt, assemblyFromStl, jointValues, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
 import { parseIntelHex } from './sim/hex';
 
@@ -82,7 +83,7 @@ function Section({ n, title }: { n: string; title: string }) {
 
 export default function App() {
   const lab = useLab();
-  const { sim, snapshot, running, setRunning, speed, setSpeed, realtime, boot } = lab;
+  const { sim, snapshot, running, setRunning, speed, setSpeed, realtime, boot: bootSim } = lab;
   const [project, setProject] = useState<Project>(initialProject);
   /** Firmware per board id. */
   const [firmwares, setFirmwares] = useState<Record<string, Firmware>>({});
@@ -100,6 +101,31 @@ export default function App() {
   const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
   const [labSel, setLabSel] = useState<string | null>(null);
   const [section, setSection] = useState<Section>({ on: false, axis: 'z', offset: 0, flip: false });
+  /** Mass properties of the current assembly (computed from the printable solids), keyed by its JSON. */
+  const massRef = useRef<{ key: string; props: Map<string, MassProps> } | null>(null);
+  const [massProps, setMassProps] = useState<Map<string, MassProps> | null>(null);
+  const [clashes, setClashes] = useState<Clash[] | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  /** Hand the mechanism to the simulation, if its masses are known for this exact assembly. */
+  const applyMech = useCallback(
+    (p: Project) => {
+      const s = sim.current;
+      if (!s) return;
+      const c = massRef.current;
+      if (p.assembly && c && c.key === JSON.stringify(p.assembly)) s.setMechanics(p.assembly, c.props);
+      else s.setMechanics(undefined, null);
+    },
+    [sim],
+  );
+  /** Boot the bench and give it the mechanism's physics. */
+  const boot = useCallback(
+    (p: Project, programs: Record<string, Uint16Array>) => {
+      bootSim(p, programs);
+      applyMech(p);
+    },
+    [bootSim, applyMech],
+  );
   const electrical = useRef(electricalKey(project));
   /** Undo/redo history of the whole project (JSON snapshots), recorded 400 ms after the last change. */
   const history = useRef({ past: [] as string[], future: [] as string[], last: JSON.stringify(project), restoring: false });
@@ -110,6 +136,44 @@ export default function App() {
   const hasBoard = boardIds.length > 0;
   const active = boardIds.includes(activeBoard) ? activeBoard : boardIds[0] ?? 'uno';
   const programs = (fw: Record<string, Firmware>) => Object.fromEntries(Object.entries(fw).map(([k, f]) => [k, f.program]));
+
+  // physics: recompute masses when the mechanism changes (debounced while editing)
+  useEffect(() => {
+    const asm = project.assembly;
+    setClashes(null);
+    if (!asm) {
+      massRef.current = null;
+      setMassProps(null);
+      sim.current?.setMechanics(undefined, null);
+      return;
+    }
+    const key = JSON.stringify(asm);
+    if (massRef.current?.key === key) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      void massProperties(asm).then((props) => {
+        if (!alive) return;
+        massRef.current = { key, props };
+        setMassProps(props);
+        sim.current?.setMechanics(asm, props);
+      });
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [project.assembly, sim]);
+
+  const checkClashes = async () => {
+    const asm = project.assembly;
+    const s = sim.current;
+    if (!asm) return;
+    setChecking(true);
+    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+    const values = jointValues(asm, (d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined));
+    setClashes(await interference(asm, values));
+    setChecking(false);
+  };
 
   // autosave
   useEffect(() => {
@@ -434,6 +498,7 @@ export default function App() {
   const checks = [
     ...(snapshot?.checks ?? []),
     ...stops.map((j) => ({ level: 'warn' as const, msg: `Joint "${j}" is driven past its limit and sits on its mechanical stop.`, device: undefined as string | undefined })),
+    ...(clashes ?? []).map((c) => ({ level: 'error' as const, msg: `Parts "${c.a}" and "${c.b}" collide: ${c.volumeMm3.toFixed(0)} mm³ overlap in this pose.`, device: undefined as string | undefined })),
   ];
   const madeParts = (asm?.links ?? []).filter((l) => l.make && l.make !== 'buy');
   const missingMounts = (asm?.mounts ?? []).filter((m) => !project.devices.some((d) => d.id === m.device));
@@ -635,11 +700,19 @@ export default function App() {
                     onSelect: setLabSel,
                     onMoveJoint: (id, position) => project.assembly && setProject({ ...project, assembly: patchJoint(project.assembly, id, { position }) }),
                     onMovePlacement: (placement) => project.assembly && setProject({ ...project, assembly: { ...project.assembly, placement } }),
+                    clashing: new Set((clashes ?? []).flatMap((c) => [c.a, c.b])),
                   }}
                 />
               </Suspense>
               <SectionPanel section={section} onChange={setSection} center={project.assembly?.placement} />
-              <LabPanel project={project} onAssembly={(a) => setProject({ ...project, assembly: a })} selected={labSel} onSelect={setLabSel} download={download} />
+              <LabPanel
+                project={project}
+                onAssembly={(a) => setProject({ ...project, assembly: a })}
+                selected={labSel}
+                onSelect={setLabSel}
+                download={download}
+                physics={{ massProps, actuators: snapshot?.actuators ?? [], totalMassG: snapshot?.mechanismMassG ?? null, clashes, checking, onCheck: () => void checkClashes() }}
+              />
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />
                 <span className="crop tr" />

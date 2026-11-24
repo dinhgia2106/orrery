@@ -54,6 +54,8 @@ It borrows URDF's model (links + joints in a tree, child frames placed in the pa
 | `{"sphere": r}` | radius |
 | `{"mesh": {"url" \| "data", "scale"}}` | an STL in millimetres: `https://` URL, a relative path, or a `data:` URL under 4 MB |
 
+`massG` (grams) overrides the mass Orrery computes as solid volume × density — use it for meshes, infilled or hollow prints, and materials without a sourced density.
+
 `position` / `rotation` place the shape in the link's own frame (the frame its parent joint defines). `opacity` (0–1) lets a shell show what is mounted inside.
 
 ### Features — making printed parts real

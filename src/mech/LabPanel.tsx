@@ -6,7 +6,17 @@ import { validateAssembly, type Assembly, type Feature, type Joint, type Link, t
 import { addChild, driveWith, mountDevice, newAssembly, parentJoint, patchJoint, patchLink, removeLink, rootLink, setFeatures, SHAPES, unmount } from './edit';
 import { fabricationPackage, madeHere, partStl, partSvg } from './fabricate';
 import type { Project } from '../lab/project';
+import { DENSITY, type ActuatorLoad, type Clash, type MassProps } from './physics';
 import { CLEARANCE_HOLE_MM, DEFAULT_CLEARANCE_MM } from './solid';
+
+export interface PhysicsView {
+  massProps: Map<string, MassProps> | null;
+  actuators: ActuatorLoad[];
+  totalMassG: number | null;
+  clashes: Clash[] | null;
+  checking: boolean;
+  onCheck: () => void;
+}
 
 interface Props {
   project: Project;
@@ -14,6 +24,7 @@ interface Props {
   selected: string | null;
   onSelect: (id: string | null) => void;
   download: (name: string, data: BlobPart, type: string) => void;
+  physics: PhysicsView;
 }
 
 const MATERIALS: NonNullable<Link['material']>[] = ['PLA', 'PETG', 'TPU', 'ABS', 'resin', 'aluminium', 'steel', 'acrylic', 'wood', 'other'];
@@ -58,7 +69,7 @@ function Block({ title, children, right }: { title: string; children: ReactNode;
   );
 }
 
-export default function LabPanel({ project, onAssembly, selected, onSelect, download }: Props) {
+export default function LabPanel({ project, onAssembly, selected, onSelect, download, physics }: Props) {
   const asm = project.assembly;
   const [busy, setBusy] = useState('');
   if (!asm)
@@ -136,6 +147,7 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
               <input type="color" value={link.color ?? '#d9dee6'} onChange={(e) => set(patchLink(asm, link.id, { color: e.target.value }))} />
               <Num label="opacity" value={link.opacity ?? 1} step={0.1} min={0} onChange={(o) => set(patchLink(asm, link.id, { opacity: Math.min(1, Math.max(0.05, o)) }))} />
             </div>
+            <MassLine link={link} mp={physics.massProps?.get(link.id)} onMass={(massG) => set(patchLink(asm, link.id, { massG }))} />
           </Block>
 
           {joint && (
@@ -196,6 +208,8 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
         </>
       )}
 
+      <PhysicsBlock physics={physics} asm={asm} onSelect={onSelect} />
+
       <Block title="MAKE IT">
         {!check.ok && (
           <ul className="asm-errors mono small">
@@ -208,6 +222,64 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
         <p className="small muted">Pocket clearance defaults to {DEFAULT_CLEARANCE_MM} mm per side — a printing allowance, not a datasheet value. Holes: M3 {CLEARANCE_HOLE_MM.M3} mm, M2 {CLEARANCE_HOLE_MM.M2} mm (ISO 273 medium).</p>
       </Block>
     </div>
+  );
+}
+
+function MassLine({ link, mp, onMass }: { link: Link; mp?: MassProps; onMass: (g: number | undefined) => void }) {
+  const rho = DENSITY[link.material ?? 'PLA'];
+  return (
+    <div className="lab-row small">
+      <span className="mono">
+        mass {mp ? `${mp.massG.toFixed(1)} g` : '…'}
+        {mp?.how === 'solid' && rho && <span className="muted"> · solid {link.material} {rho.gPerCm3} g/cm³</span>}
+        {mp?.how === 'unknown' && <span className="warn-text"> · {mp.note}</span>}
+      </span>
+      <Num label="massG" step={1} min={0} value={link.massG ?? NaN} onChange={(g) => onMass(g > 0 ? g : undefined)} />
+    </div>
+  );
+}
+
+/** Gravity loads on the actuators in the current pose, and the interference check. */
+function PhysicsBlock({ physics, asm, onSelect }: { physics: PhysicsView; asm: Assembly; onSelect: (id: string) => void }) {
+  const unknown = physics.massProps ? [...physics.massProps.entries()].filter(([, m]) => m.how === 'unknown').map(([id]) => id) : [];
+  return (
+    <Block title="PHYSICS (gravity, statics)" right={physics.totalMassG !== null ? <span>{physics.totalMassG.toFixed(0)} g</span> : <span className="muted">…</span>}>
+      {unknown.length > 0 && <p className="small warn-text">No mass for {unknown.join(', ')} — set massG.</p>}
+      {physics.actuators.length > 0 ? (
+        <table className="loads mono">
+          <tbody>
+            {physics.actuators.map((a) => {
+              const pct = Math.abs(a.torqueKgfCm) / a.limitKgfCm;
+              return (
+                <tr key={a.device} className={pct >= 1 ? 'over' : pct > 0.7 ? 'high' : ''}>
+                  <td>{a.device}</td>
+                  <td>{(Math.abs(a.torqueKgfCm) < 0.005 ? 0 : a.torqueKgfCm).toFixed(2)}</td>
+                  <td className="bar-cell">
+                    <span className="load-bar" style={{ width: `${Math.min(100, pct * 100)}%` }} />
+                  </td>
+                  <td>{(pct * 100).toFixed(0)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ) : (
+        <p className="small muted">Drive a joint with a bench servo or stepper to see its gravity load.</p>
+      )}
+      <p className="small muted">kgf·cm at the shaft vs the SG90 stall (1.8) or NEMA 17 holding torque (3.7). Above 100 % the actuator stalls in the simulation.</p>
+      <div className="lab-row">
+        <button onClick={physics.onCheck} disabled={physics.checking}>
+          {physics.checking ? 'Checking…' : 'Check collisions in this pose'}
+        </button>
+        {physics.clashes && <span className={physics.clashes.length ? 'warn-text small' : 'small muted'}>{physics.clashes.length ? `${physics.clashes.length} clash(es)` : 'no clashes'}</span>}
+      </div>
+      {physics.clashes?.slice(0, 8).map((c) => (
+        <div key={`${c.a}|${c.b}`} className="small clash" onClick={() => onSelect(c.a)}>
+          <b className="mono">{c.a}</b> ↔ <b className="mono">{c.b}</b> — {c.volumeMm3.toFixed(0)} mm³
+        </div>
+      ))}
+      {asm.joints.some((j) => j.type === 'prismatic' && j.drive) && <p className="small muted">Prismatic joints: forces along the slide are not computed yet.</p>}
+    </Block>
   );
 }
 

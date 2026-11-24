@@ -275,6 +275,11 @@
           "items": {
             "$ref": "#/$defs/feature"
           }
+        },
+        "massG": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Mass in grams, when it should not be computed as solid volume × density (meshes, infilled prints, materials without a sourced density)"
         }
       }
     },

@@ -483,7 +483,7 @@ function SolidMesh({ link, material, onClick }: { link: Link; material: ReactNod
   ) : null;
 }
 
-function LinkShape({ link, selected, onSelect }: { link: Link; selected?: boolean; onSelect?: (id: string) => void }) {
+function LinkShape({ link, selected, clash, onSelect }: { link: Link; selected?: boolean; clash?: boolean; onSelect?: (id: string) => void }) {
   const s = link.shape;
   const onClick = onSelect
     ? (e: { stopPropagation: () => void }) => {
@@ -493,8 +493,8 @@ function LinkShape({ link, selected, onSelect }: { link: Link; selected?: boolea
     : undefined;
   const material = (
     <meshStandardMaterial
-      emissive={selected ? '#1c4fa0' : '#000000'}
-      emissiveIntensity={selected ? 0.35 : 0}
+      emissive={clash ? '#c2412d' : selected ? '#1c4fa0' : '#000000'}
+      emissiveIntensity={clash ? 0.6 : selected ? 0.35 : 0}
       color={link.color ?? MATERIAL_COLOR[link.material ?? 'PLA']}
       roughness={link.material === 'aluminium' || link.material === 'steel' ? 0.35 : 0.75}
       metalness={link.material === 'aluminium' || link.material === 'steel' ? 0.8 : 0.05}
@@ -530,6 +530,8 @@ export interface LabControls {
   onSelect: (id: string | null) => void;
   onMoveJoint: (jointId: string, position: Vec3) => void;
   onMovePlacement: (position: Vec3) => void;
+  /** Parts found overlapping by the interference check. */
+  clashing?: Set<string>;
 }
 
 const round1 = (v: Vector3): Vec3 => [Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, Math.round(v.z * 10) / 10];
@@ -621,7 +623,7 @@ function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: Lab
     const link = asm.links.find((l) => l.id === id)!;
     return (
       <>
-        <LinkShape link={link} selected={lab?.selected === id} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
+        <LinkShape link={link} selected={lab?.selected === id} clash={lab?.clashing?.has(id)} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
         {(asm.mounts ?? [])
           .filter((m) => m.link === id)
           .map((m) => (

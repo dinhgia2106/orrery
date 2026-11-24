@@ -34,7 +34,16 @@ The 3D tab is a lab, not just a view: start a mechanism, add parts (box, cylinde
 
 **Make it**: each part exports as a binary STL (mm) and an A4 drawing (three views, third-angle projection, overall sizes, feature list, title block); **Fabrication package** puts every part's STL and drawing, the BOM (electronics with part numbers, made parts, hardware), the assembly JSON and a README in one ZIP. Pocket clearance (0.2 mm per side by default) is a printing allowance, not a datasheet value — print a test piece.
 
-Kinematics only: masses, forces, torques and collisions are not simulated.
+### What the physics covers
+
+The mechanism is simulated with **statics under gravity**, computed from the real geometry:
+
+- **Mass and centre of mass** of every made part are integrated from its watertight solid (volume × density): PLA 1.24, PETG 1.27 g/cm³ (Prusament data sheets, ISO 1183), ABS 1.04 (Essentium ABS MG94, ISO 1183), aluminium 6061-T6 2.70 (ASM/MatWeb, Aalco). Parts print solid in this model (an upper bound — set `massG` for infilled or hollow parts, meshes, and materials without a sourced density). Mounted parts add their own mass: SG90 9 g, NEMA 17 285 g, A4988 carrier 1.3 g.
+- **Gravity torque at every revolute joint** in the current pose, carried back through followers (tendons, gears) and transmissions to each servo or stepper by virtual work (ideal, friction-free).
+- **Actuators feel it**: an SG90 follows the straight torque–speed line between its no-load speed (60°/0.1 s) and stall torque (1.8 kgf·cm), so it slows under load and stalls at 1.8 kgf·cm; a NEMA 17 loses steps above its 3.7 kgf·cm holding torque. Loads, % of limit and stalls show in the 3D lab and the checks.
+- **Collisions**: *Check collisions in this pose* intersects every pair of made parts (parts joined directly by a joint are skipped) and reports the overlap in mm³; clashing parts turn red.
+
+Not modelled: inertia and acceleration, friction, tendon stretch, bending or breaking of parts, shaft side loads, contact forces (a grip's force on an object), and continuous collision during motion. Prismatic-joint forces are not computed yet.
 
 ### Compiling your sketch
 

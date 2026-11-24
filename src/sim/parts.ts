@@ -108,6 +108,10 @@ export class Servo implements Part {
   pulseUs = 0;
   /** Whether the servo can follow its signal (powered within range, ground shared with the signal source). */
   gate: () => boolean = () => true;
+  /** External torque on the output shaft, kgf·cm; positive pushes towards larger angles (from the mechanism's gravity loads). */
+  loadKgfCm = 0;
+  /** True while the load holds the horn back: the opposing torque reaches the stall torque. */
+  stalled = false;
   private rise = -1;
   private lastT = 0;
 
@@ -145,12 +149,23 @@ export class Servo implements Part {
     this.target = ((clamped - minUs) / (maxUs - minUs)) * 180;
   }
 
+  /**
+   * Linear DC-motor torque–speed line between the two published points — no-load speed 60°/0.1 s and stall
+   * torque 1.8 kgf·cm (TowerPro, 4.8 V): a load that opposes the motion slows it, and at stall it stops.
+   * A load that helps is capped at the no-load speed (the servo's controller limits it). No back-driving.
+   */
   update(t: number): void {
     const dt = Math.max(0, t - this.lastT);
     this.lastT = t;
-    const step = this.opts.degPerSec * dt;
     const diff = this.target - this.angle;
-    this.angle += Math.abs(diff) <= step ? diff : Math.sign(diff) * step;
+    const dir = Math.sign(diff);
+    const opposing = Math.max(0, -dir * this.loadKgfCm);
+    const stall = this.opts.stallTorqueKgCm;
+    this.stalled = dir !== 0 && opposing >= stall;
+    if (this.stalled)
+      warnOnce(this.warnings, `Servo ${this.id}: stalled — the mechanism's gravity load (~${opposing.toFixed(2)} kgf·cm at the shaft) reaches the SG90's ${stall} kgf·cm stall torque.`);
+    const step = this.opts.degPerSec * Math.max(0, 1 - opposing / stall) * dt;
+    this.angle += Math.abs(diff) <= step ? diff : dir * step;
   }
 
   get moving(): boolean {
@@ -185,6 +200,8 @@ export class StepperA4988 implements Part {
   dirSign = 1;
   /** Whether a STEP edge moves the shaft right now (driver powered, awake, enabled, coils paired). */
   gate: () => boolean = () => true;
+  /** External torque on the shaft, kgf·cm; positive pushes towards larger angles. */
+  loadKgfCm = 0;
   private dirHigh = false;
   private dirChangedAt = -1;
   private stepHigh = false;
@@ -226,6 +243,14 @@ export class StepperA4988 implements Part {
     }
     if (!this.gate()) {
       this.ignored++;
+      return;
+    }
+    // a load beyond the holding torque (3.7 kgf·cm, Pololu #2267) slips the rotor: the step is lost. Running torque
+    // falls with speed (the drawing's pull-out curve), so this check is optimistic at speed.
+    const opposing = Math.max(0, -((this.dirHigh ? 1 : -1) * this.dirSign) * this.loadKgfCm);
+    if (opposing > SPEC.nema17.holdingTorqueKgfCm) {
+      this.missed++;
+      warnOnce(this.warnings, `Stepper ${this.id}: the load (~${opposing.toFixed(2)} kgf·cm) exceeds the ${SPEC.nema17.holdingTorqueKgfCm} kgf·cm holding torque — steps are lost.`);
       return;
     }
     const minGap = 1 / (this.opts.maxStepsPerSec * this.opts.microsteps);

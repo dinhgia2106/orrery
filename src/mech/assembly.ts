@@ -47,6 +47,8 @@ export interface Link {
   make?: 'print' | 'buy' | 'cut' | 'machine';
   /** Holes, cuts, pockets and bosses (not for mesh shapes). */
   features?: Feature[];
+  /** Mass in grams when it should not be computed from volume × density (meshes, hollow or infilled prints, unsourced materials). */
+  massG?: number;
 }
 
 export type Drive =
@@ -146,6 +148,7 @@ export function validateAssembly(input: unknown): ValidationResult {
     if (l.position !== undefined && !isVec(l.position)) errors.push(`${where}: "position" must be [x, y, z]`);
     if (l.rotation !== undefined && !isVec(l.rotation)) errors.push(`${where}: "rotation" must be [rx, ry, rz] in degrees`);
     if (l.opacity !== undefined && (!isNum(l.opacity) || l.opacity < 0 || l.opacity > 1)) errors.push(`${where}: "opacity" must be 0–1`);
+    if (l.massG !== undefined && !(isNum(l.massG) && l.massG >= 0)) errors.push(`${where}: "massG" must be a mass in grams ≥ 0`);
     if (l.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(String(l.color))) errors.push(`${where}: "color" must be #rrggbb`);
     if (l.features !== undefined) {
       if (!Array.isArray(l.features)) errors.push(`${where}: "features" must be a list`);

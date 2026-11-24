@@ -430,3 +430,12 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .section-panel { position: absolute; top: 12px; right: 40px; z-index: 5; display: grid; gap: 6px; min-width: 190px; padding: 8px 10px; font-size: 11px; color: var(--ink); background: rgba(255,255,255,0.92); border: 1px solid var(--ink-soft); border-radius: 4px; }
 .section-toggle { display: flex; align-items: center; gap: 6px; letter-spacing: 0.12em; cursor: pointer; }
 .section-panel .lab-row button.on { border-color: var(--ink); color: #fff; background: var(--ink); }
+.loads { width: 100%; border-collapse: collapse; font-size: 11px; }
+.loads td { padding: 1px 4px; border-bottom: 1px solid var(--quartz); white-space: nowrap; }
+.loads td:nth-child(2), .loads td:nth-child(4) { text-align: right; }
+.loads .bar-cell { width: 45%; }
+.load-bar { display: block; height: 6px; background: var(--ink); border-radius: 1px; }
+.loads tr.high .load-bar { background: var(--amber); }
+.loads tr.over .load-bar { background: var(--danger); }
+.loads tr.over td { color: var(--danger); }
+.clash { cursor: pointer; color: var(--danger); }

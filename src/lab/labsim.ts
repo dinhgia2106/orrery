@@ -4,6 +4,8 @@ import { ANALOG_PINS, ArduinoUno, DIGITAL_PINS, pinLocation, type PinName } from
 import { SPEC } from '../sim/catalog';
 import { Button, Potentiometer, Servo, StepperA4988, type PartState } from '../sim/parts';
 import { PinState } from 'avr8js';
+import { jointValues, type Assembly } from '../mech/assembly';
+import { gravityLoads, type ActuatorLoad, type Loads, type MassProps } from '../mech/physics';
 import { Netlist, solve, type Element, type Solution } from './circuit';
 import type { Device, Project } from './project';
 
@@ -25,6 +27,10 @@ export interface LabSnapshot {
   checks: Check[];
   /** Serial output per board. */
   serial: Record<string, string>;
+  /** Gravity load on each actuator of the mechanism, when its masses are known. */
+  actuators: ActuatorLoad[];
+  /** Total mass of the mechanism and its mounted parts, g. */
+  mechanismMassG: number | null;
 }
 
 const IO_PINS: PinName[] = [...DIGITAL_PINS, ...ANALOG_PINS];
@@ -114,6 +120,9 @@ export class LabSimulation {
   private modeSig = '';
   private checks = new Map<string, Check>();
   private staticChecks = new Map<string, Check>();
+  private mech: { asm: Assembly; props: Map<string, MassProps> } | null = null;
+  private loads: Loads | null = null;
+  private slice = 0;
   /** "board.pin" whose net reaches only high-impedance inputs (servo SIG, A4988 STEP/DIR): an edge there changes no voltage elsewhere. */
   private readonly quiet = new Set<string>();
 
@@ -227,9 +236,31 @@ export class LabSimulation {
         this.dirty = true;
       }
       if (this.dirty) this.resolve(t);
+      if (this.mech && this.slice++ % 10 === 0) this.updateLoads(); // every 10 ms: a servo turns at most 6° in that time
       this.trackRails();
       left -= dt;
     }
+  }
+
+  /** Give the simulation the mechanism and its mass properties: actuators then carry its gravity loads. */
+  setMechanics(asm: Assembly | undefined, props: Map<string, MassProps> | null): void {
+    this.mech = asm && props ? { asm, props } : null;
+    if (!this.mech) {
+      this.loads = null;
+      for (const s of this.servos.values()) s.loadKgfCm = 0;
+      for (const d of this.drivers.values()) d.stepper.loadKgfCm = 0;
+      return;
+    }
+    this.updateLoads();
+  }
+
+  private updateLoads(): void {
+    const { asm, props } = this.mech!;
+    const stepperMounted = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+    const values = jointValues(asm, (d) => this.servos.get(d)?.angle ?? (stepperMounted.has(d) ? this.motorAngle(d) : undefined));
+    this.loads = gravityLoads(asm, props, values);
+    for (const [id, s] of this.servos) s.loadKgfCm = this.loads.actuators.get(id)?.torqueKgfCm ?? 0;
+    for (const d of this.drivers.values()) d.stepper.loadKgfCm = (d.motor && this.loads.actuators.get(d.motor.id)?.torqueKgfCm) || 0;
   }
 
   /** Type into a board's serial port (the first board when no id is given). */
@@ -321,6 +352,8 @@ export class LabSimulation {
       rails,
       checks: [...this.fatal, ...this.checks.values(), ...runtime],
       serial,
+      actuators: this.loads ? [...this.loads.actuators.values()] : [],
+      mechanismMassG: this.loads ? this.loads.totalMassG : null,
     };
   }
 
