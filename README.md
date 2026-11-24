@@ -14,7 +14,7 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 4. **Run** — with no board the circuit still runs from bench supplies (an LED, a divider, a motor driver's power side); a board with nothing uploaded is a blank chip with every pin an input. With a sketch, the firmware runs on an emulated ATmega328P; the bench circuit is solved from your wiring (DC nodal analysis) every time an output pin changes, so inputs see real voltages: pull-ups, dividers, an open button, a floating pin.
 5. **3D bench** (FIG. 2) — the same project at real scale, laid out like your wiring view.
 
-Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Six templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand, Two boards over serial) come wired and with prebuilt firmware, so they run even without a compiler.
+Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Seven templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand, Dexterous hand with 17 DOF on two boards, Two boards over serial) come wired and with prebuilt firmware, so they run even without a compiler.
 
 ### Mechanisms: the Orrery Assembly Format
 
@@ -23,6 +23,7 @@ Projects autosave in the browser, save/open as `.orrery.json`, and **Share** put
 - **Import** an assembly or an STL; devices it mounts that the bench lacks are added, ready to wire.
 - **Ask an AI**: the lab copies a prompt with the rules, an example and the schema; paste the answer back and the validator lists every problem in plain words.
 - The 3D view moves the joints from the running firmware; a drive pushing a joint past its limit is reported; printed parts and hardware join the BOM.
+- Example — a dexterous hand: [`examples/dexterous-hand/dexterous-hand.assembly.json`](examples/dexterous-hand/dexterous-hand.assembly.json) has 17 driven joints (wrist rotation and pitch; per finger spread, knuckle and middle flex with the tip following; thumb opposition, base and middle flex), a printable servo bed with 15 SG90 pockets, phalanges with hinge and tendon holes; U1 runs the flexion servos and sends the gesture to U2 over serial, U2 the spread and wrist (the Servo library drives at most 12 servos per Uno).
 - Example — what a robot hand needs: [`examples/robot-hand/robot-hand.assembly.json`](examples/robot-hand/robot-hand.assembly.json) (forearm, wrist, palm, 14 phalanges, tendon-coupled finger joints, six SG90s, tendon line, sheaths, return elastics, hinge pins, a wrist bearing).
 
 ### 3D lab: from prototype to parts you can make

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import handHex from '../../public/examples/robot-hand.hex?raw';
+import dexHex from '../../public/examples/dexterous-hand.hex?raw';
+import dexWristHex from '../../public/examples/dexterous-hand-wrist.hex?raw';
+import dexterousJson from '../../examples/dexterous-hand/dexterous-hand.assembly.json';
+import { fabricationPackage } from './fabricate';
 import armJson from '../../examples/robot-arm/robot-arm.assembly.json';
 import handJson from '../../examples/robot-hand/robot-hand.assembly.json';
 import { LabSimulation } from '../lab/labsim';
@@ -84,5 +88,42 @@ describe('robot hand template', () => {
     expect(snap.checks).toEqual([]);
     expect(snap.railMa).toBeLessThan(100); // servo current goes to the bench supply, not the USB fuse
     expect(snap.serial.uno).toContain('hand ready');
+  });
+});
+
+describe('dexterous hand, 17 DOF on two boards', () => {
+  it('validates, and every driven joint has its own servo', () => {
+    const r = validateAssembly(dexterousJson);
+    expect(r.errors).toEqual([]);
+    const a = dexterousJson as unknown as Assembly;
+    const driven = a.joints.filter((j) => j.drive && 'device' in j.drive);
+    expect(driven).toHaveLength(17);
+    expect(new Set(driven.map((j) => (j.drive as { device: string }).device)).size).toBe(17);
+  });
+
+  it('U1 makes a fist, tells U2 over serial, and the tendon joints follow', () => {
+    const p = cloneProject(TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project);
+    const sim = new LabSimulation(p, { uno: parseIntelHex(dexHex), uno2: parseIntelHex(dexWristHex) });
+    sim.step(3); // gesture 0 (open) at 0 s, gesture 1 (fist) at 2.5 s
+    const snap = sim.snapshot();
+    expect(snap.serial.uno).toContain('1 fist');
+    expect(snap.serial.uno2).toContain('pose 1 fist');
+    expect(snap.checks).toEqual([]);
+    const a = p.assembly!;
+    const angle = (d: string) => sim.servos.get(d)?.angle;
+    const v = jointValues(a, angle);
+    expect(v.get('index_mcp')).toBeCloseTo(90, 0);
+    expect(v.get('index_pip')).toBeCloseTo(100, 0);
+    expect(v.get('index_dip')).toBeCloseTo(70, 0); // follows the middle joint × 0.7
+    expect(v.get('wrist_pitch')).toBeCloseTo(((110 - 90) / 180) * 90, 0); // U2 tilts the wrist for the fist
+    expect(jointsAtStop(a, angle)).toEqual([]);
+  });
+
+  it('exports a printable servo bed with 15 SG90 pockets and every phalanx', async () => {
+    const p = cloneProject(TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project);
+    const z = new TextDecoder('latin1').decode(await fabricationPackage(p));
+    expect(z).toContain('parts/forearm.stl');
+    expect(z).toContain('drawings/index_dist.svg');
+    expect(p.assembly!.links.find((l) => l.id === 'forearm')!.features!.filter((f) => 'pocket' in f)).toHaveLength(15);
   });
 });

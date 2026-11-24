@@ -642,6 +642,44 @@ function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: Lab
   );
 }
 
+/** Every link frame of an assembly at home pose, on the bench in mm. */
+function linkOrigins(asm: Assembly): Vector3[] {
+  const parentJoint = new Map(asm.joints.map((j) => [j.child, j]));
+  const local = (pos?: Vec3, rot?: Vec3) => new Matrix4().compose(new Vector3(...(pos ?? [0, 0, 0])), new Quaternion().setFromEuler(new Euler(...rad(rot))), new Vector3(1, 1, 1));
+  return asm.links.map((l) => {
+    let mat = local(l.position);
+    let link = l.id;
+    for (let guard = 0; guard < 400; guard++) {
+      const j = parentJoint.get(link);
+      if (!j) break;
+      mat = local(j.position, j.rotation).multiply(mat);
+      link = j.parent;
+    }
+    return new Vector3().setFromMatrixPosition(local(asm.placement ?? [150, 0, 0]).multiply(mat));
+  });
+}
+
+/** Camera target and position (scene units = cm) that frame the boards, parts and mechanism on the bench. */
+function benchFrame(project: Project): { target: V3; camera: V3 } {
+  const pts: Vector3[] = [];
+  const uno = project.devices.find((d) => d.kind === 'uno');
+  const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
+  const ucy = uno ? uno.y + DEVICES.uno.h / 2 : DEVICES.uno.h / 2;
+  for (const d of project.devices) {
+    const k = d.kind === 'uno' ? 5 : SPREAD;
+    pts.push(new Vector3((d.x + DEVICES[d.kind].w / 2 - ucx) / k, 0, (d.y + DEVICES[d.kind].h / 2 - ucy) / k));
+  }
+  if (project.assembly) pts.push(...linkOrigins(project.assembly));
+  if (!pts.length) pts.push(new Vector3(0, 0, 0));
+  const min = pts.reduce((a, p) => a.min(p), pts[0].clone());
+  const max = pts.reduce((a, p) => a.max(p), pts[0].clone());
+  const c = min.clone().add(max).multiplyScalar(0.5);
+  const size = Math.max(250, max.clone().sub(min).length() + 80); // mm, with room for the parts around the frames
+  const t: V3 = [c.x / 10, Math.max(2, c.y / 10), c.z / 10];
+  const d = (size / 10) * 1.15;
+  return { target: t, camera: [t[0] + d * 0.25, t[1] + d * 0.55, t[2] + d * 1.0] };
+}
+
 /** Where a mounted device sits on the bench with every joint at home — used to end its wires. */
 function mountWorld(asm: Assembly, device: string): V3 | null {
   const m = asm.mounts?.find((x) => x.device === device);
@@ -670,7 +708,7 @@ export default function Scene({ sim, project, lab }: { sim: SimRef; project: Pro
   const ucy = uno ? uno.y + DEVICES.uno.h / 2 : DEVICES.uno.h / 2;
   const asm = project.assembly;
   // look at the bench when there is a board, else at the mechanism (scene units are cm)
-  const focus: V3 = uno || !asm ? [8, 8, 3] : [(asm.placement?.[0] ?? 150) / 10, 3, (asm.placement?.[2] ?? 0) / 10];
+  const frame = benchFrame(project);
   const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
   const place = new Map<string, V3>();
@@ -733,7 +771,7 @@ export default function Scene({ sim, project, lab }: { sim: SimRef; project: Pro
   });
 
   return (
-    <Canvas shadows camera={{ position: [10, 32, 52], fov: 40 }} dpr={[1, 2]} gl={{ alpha: true }}>
+    <Canvas shadows camera={{ position: frame.camera, fov: 40, far: 2000 }} dpr={[1, 2]} gl={{ alpha: true }}>
       <ambientLight intensity={0.75} />
       <hemisphereLight args={['#ffffff', '#d8dde6', 0.6]} />
       <directionalLight position={[8, 16, 10]} intensity={1.7} castShadow shadow-mapSize={[2048, 2048]}>
@@ -753,7 +791,7 @@ export default function Scene({ sim, project, lab }: { sim: SimRef; project: Pro
         <shadowMaterial opacity={0.16} />
       </mesh>
       <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
-      <OrbitControls makeDefault target={focus} maxPolarAngle={Math.PI / 2.05} />
+      <OrbitControls makeDefault target={frame.target} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>
   );
 }

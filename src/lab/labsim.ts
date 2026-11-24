@@ -114,6 +114,8 @@ export class LabSimulation {
   private modeSig = '';
   private checks = new Map<string, Check>();
   private staticChecks = new Map<string, Check>();
+  /** "board.pin" whose net reaches only high-impedance inputs (servo SIG, A4988 STEP/DIR): an edge there changes no voltage elsewhere. */
+  private readonly quiet = new Set<string>();
 
   /**
    * @param programs firmware per board id; a single program goes to the first board (older callers).
@@ -180,10 +182,11 @@ export class LabSimulation {
       }
     }
 
+    this.findQuietPins();
     for (const b of this.boards) {
       b.board.onPin((pin, high, t) => {
         b.subscribers.get(pin)?.forEach((f) => f(high, t));
-        this.resolve(t);
+        if (!this.quiet.has(`${b.id}.${pin}`)) this.resolve(t);
       });
       b.board.onSerial((ch) => {
         b.serial = (b.serial + ch).slice(-8000);
@@ -296,9 +299,12 @@ export class LabSimulation {
     for (const b of this.boards) {
       for (const p of IO_PINS) {
         const n = b.net.get(p)!;
+        const st = this.pinState({ b, pin: p });
+        // an output on a quiet net is not re-solved on every edge; with no load its voltage is the logic level
+        const quietOut = this.quiet.has(`${b.id}.${p}`) && (st === PinState.High || st === PinState.Low);
         pins[`${b.id}.${p}`] = {
-          mode: MODE_NAMES[this.pinState({ b, pin: p })],
-          volts: this.sol && this.sol.driven[n] ? round(this.sol.volts[n] - this.sol.volts[b.gnd], 2) : null,
+          mode: MODE_NAMES[st],
+          volts: quietOut ? (st === PinState.High ? VCC : 0) : this.sol && this.sol.driven[n] ? round(this.sol.volts[n] - this.sol.volts[b.gnd], 2) : null,
         };
       }
       rails[b.id] = Math.round(b.peakRailMa);
@@ -414,6 +420,19 @@ export class LabSimulation {
     this.drivers.set(id, rt);
   }
 
+  private findQuietPins(): void {
+    const hiZ = new Set<string>();
+    for (const d of this.project.devices) {
+      if (d.kind === 'servo') hiZ.add(`${d.id}.SIG`);
+      if (d.kind === 'a4988') for (const p of ['STEP', 'DIR']) hiZ.add(`${d.id}.${p}`);
+    }
+    for (const b of this.boards)
+      for (const pin of IO_PINS) {
+        const members = this.nets.members[b.net.get(pin)!];
+        if (members.every((m) => m === `${b.id}.${pin}` || hiZ.has(m))) this.quiet.add(`${b.id}.${pin}`);
+      }
+  }
+
   private addStatic(key: string, level: Check['level'], msg: string, device?: string): void {
     this.staticChecks.set(key, { level, msg, device });
   }
@@ -434,9 +453,14 @@ export class LabSimulation {
     return p.b.board.ports[port].pinState(bit);
   }
 
+  /** Pin directions and pull-ups only: output levels arrive as onPin edges. */
   private modeSignature(): string {
     let s = '';
-    for (const b of this.boards) for (const pin of IO_PINS) s += this.pinState({ b, pin });
+    for (const b of this.boards)
+      for (const pin of IO_PINS) {
+        const st = this.pinState({ b, pin });
+        s += st === PinState.High || st === PinState.Low ? 'o' : st;
+      }
     return s;
   }
 
@@ -698,7 +722,8 @@ export class LabSimulation {
         if (e.kind === 'V' && (e.tag === `${b.id}:5V` || e.tag === `${b.id}:3V3`)) a += Math.max(0, this.sol!.sourceAmps.get(i) ?? 0);
       });
       for (const pin of IO_PINS)
-        if (this.pinState({ b, pin }) === PinState.High) a += Math.max(0, (VCC - (this.sol.volts[b.net.get(pin)!] - this.sol.volts[b.gnd])) / R_SOURCE);
+        if (!this.quiet.has(`${b.id}.${pin}`) && this.pinState({ b, pin }) === PinState.High)
+          a += Math.max(0, (VCC - (this.sol.volts[b.net.get(pin)!] - this.sol.volts[b.gnd])) / R_SOURCE); // quiet nets carry no current
       let ma = a * 1000 + SPEC.uno.boardMaApprox + (b.board.isHigh('D13') ? (VCC / SPEC.uno.builtinLedSeriesOhms) * 1000 : 0);
       for (const [id, s] of this.servos) if (this.nets.net(`${id}.V+`) === b.n5v && s.moving) ma += SPEC.sg90.movingMaApprox;
       for (const r of this.drivers.values()) if (this.nets.net(`${r.dev.id}.VDD`) === b.n5v) ma += SPEC.a4988.logicMaMax;

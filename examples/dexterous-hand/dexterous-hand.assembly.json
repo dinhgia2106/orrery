@@ -1,0 +1,2330 @@
+{
+  "format": "orrery.assembly",
+  "version": 1,
+  "units": "mm",
+  "name": "Dexterous hand, 17 DOF",
+  "description": "Tendon-driven hand with 17 degrees of freedom: wrist rotation and pitch; per finger spread, knuckle flex and middle flex with the tip following the middle joint; thumb opposition, base flex and middle flex. Fifteen SG90s sit in a printed servo bed, two more drive the wrist.",
+  "placement": [
+    170,
+    0,
+    -30
+  ],
+  "links": [
+    {
+      "id": "stand",
+      "label": "stand with a rib holding the servo bed",
+      "shape": {
+        "box": [
+          150,
+          8,
+          90
+        ]
+      },
+      "position": [
+        0,
+        4,
+        0
+      ],
+      "color": "#c9d3e2",
+      "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                120,
+                20,
+                10
+              ]
+            },
+            "position": [
+              0,
+              18,
+              7
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 3.4,
+            "position": [
+              -65,
+              0,
+              35
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 3.4,
+            "position": [
+              65,
+              0,
+              35
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 3.4,
+            "position": [
+              -65,
+              0,
+              -35
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 3.4,
+            "position": [
+              65,
+              0,
+              -35
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "forearm",
+      "label": "servo bed: 15 SG90 pockets",
+      "shape": {
+        "box": [
+          124,
+          200,
+          4
+        ]
+      },
+      "position": [
+        0,
+        100,
+        0
+      ],
+      "color": "#dfe5ee",
+      "features": [
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              -38,
+              40,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              0,
+              40,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              38,
+              40,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              -38,
+              72,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              0,
+              72,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              38,
+              72,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              -38,
+              104,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              0,
+              104,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              38,
+              104,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              -38,
+              136,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              0,
+              136,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              38,
+              136,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              -38,
+              168,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              0,
+              168,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "pocket": {
+            "for": "sg90",
+            "position": [
+              38,
+              168,
+              0
+            ],
+            "rotation": [
+              90,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "wrist_mount",
+      "label": "wrist servo mount",
+      "shape": {
+        "box": [
+          44,
+          6,
+          30
+        ]
+      },
+      "position": [
+        0,
+        3,
+        0
+      ],
+      "color": "#c9d3e2",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              -16,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              16,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "wrist_yoke",
+      "label": "yoke on the rotation horn",
+      "shape": {
+        "box": [
+          56,
+          6,
+          34
+        ]
+      },
+      "position": [
+        5.65,
+        3,
+        0
+      ],
+      "color": "#b7c4d8",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "palm",
+      "label": "palm with tendon channels",
+      "shape": {
+        "box": [
+          96,
+          92,
+          24
+        ]
+      },
+      "position": [
+        16,
+        96,
+        0
+      ],
+      "color": "#eef1f5",
+      "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                4,
+                52,
+                20
+              ]
+            },
+            "position": [
+              -2,
+              25,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.2,
+            "position": [
+              -17,
+              96,
+              6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.2,
+            "position": [
+              5,
+              96,
+              6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.2,
+            "position": [
+              27,
+              96,
+              6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.2,
+            "position": [
+              49,
+              96,
+              6
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "index_knuckle",
+      "label": "index knuckle barrel",
+      "shape": {
+        "cylinder": {
+          "r": 6,
+          "h": 14
+        }
+      },
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "index_prox",
+      "label": "index finger, proximal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 9,
+          "h": 24
+        }
+      },
+      "position": [
+        0,
+        21.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              7.2,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              21.0,
+              4.05
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              34.8,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "index_mid",
+      "label": "index finger, middle phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8.5,
+          "h": 9.0
+        }
+      },
+      "position": [
+        0,
+        13.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.8,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              13.0,
+              3.83
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              19.2,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "index_dist",
+      "label": "index finger, distal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8,
+          "h": 4
+        }
+      },
+      "position": [
+        0,
+        10.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.4,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              10.0,
+              3.6
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "middle_knuckle",
+      "label": "middle knuckle barrel",
+      "shape": {
+        "cylinder": {
+          "r": 6,
+          "h": 14
+        }
+      },
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "middle_prox",
+      "label": "middle finger, proximal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 9,
+          "h": 28
+        }
+      },
+      "position": [
+        0,
+        23.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              7.2,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              23.0,
+              4.05
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              38.8,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "middle_mid",
+      "label": "middle finger, middle phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8.5,
+          "h": 13.0
+        }
+      },
+      "position": [
+        0,
+        15.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.8,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              15.0,
+              3.83
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              23.2,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "middle_dist",
+      "label": "middle finger, distal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8,
+          "h": 5
+        }
+      },
+      "position": [
+        0,
+        10.5,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.4,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              10.5,
+              3.6
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "ring_knuckle",
+      "label": "ring knuckle barrel",
+      "shape": {
+        "cylinder": {
+          "r": 6,
+          "h": 14
+        }
+      },
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "ring_prox",
+      "label": "ring finger, proximal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 9,
+          "h": 25
+        }
+      },
+      "position": [
+        0,
+        21.5,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              7.2,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              21.5,
+              4.05
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              35.8,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "ring_mid",
+      "label": "ring finger, middle phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8.5,
+          "h": 11.0
+        }
+      },
+      "position": [
+        0,
+        14.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.8,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              14.0,
+              3.83
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              21.2,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "ring_dist",
+      "label": "ring finger, distal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8,
+          "h": 4
+        }
+      },
+      "position": [
+        0,
+        10.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.4,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              10.0,
+              3.6
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "little_knuckle",
+      "label": "little knuckle barrel",
+      "shape": {
+        "cylinder": {
+          "r": 6,
+          "h": 14
+        }
+      },
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "little_prox",
+      "label": "little finger, proximal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8,
+          "h": 19
+        }
+      },
+      "position": [
+        0,
+        17.5,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.4,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              17.5,
+              3.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              28.6,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "little_mid",
+      "label": "little finger, middle phalanx",
+      "shape": {
+        "capsule": {
+          "r": 7.5,
+          "h": 7.0
+        }
+      },
+      "position": [
+        0,
+        11.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.0,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              11.0,
+              3.38
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              16.0,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "little_dist",
+      "label": "little finger, distal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 7,
+          "h": 4
+        }
+      },
+      "position": [
+        0,
+        9.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              5.6,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              9.0,
+              3.15
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "thumb_base",
+      "label": "thumb base (opposition)",
+      "shape": {
+        "cylinder": {
+          "r": 9,
+          "h": 14
+        }
+      },
+      "position": [
+        0,
+        7,
+        0
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              14,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "thumb_meta",
+      "label": "thumb, metacarpal",
+      "shape": {
+        "capsule": {
+          "r": 9.5,
+          "h": 15.0
+        }
+      },
+      "position": [
+        0,
+        17.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              7.6,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              17.0,
+              4.28
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              26.4,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "thumb_prox",
+      "label": "thumb, proximal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 9,
+          "h": 10
+        }
+      },
+      "position": [
+        0,
+        14.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              7.2,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              14.0,
+              4.05
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              20.8,
+              0
+            ],
+            "axis": "x"
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "thumb_dist",
+      "label": "thumb, distal phalanx",
+      "shape": {
+        "capsule": {
+          "r": 8.5,
+          "h": 7.0
+        }
+      },
+      "position": [
+        0,
+        12.0,
+        0
+      ],
+      "color": "#f6f7f9",
+      "features": [
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              6.8,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              12.0,
+              3.83
+            ]
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    }
+  ],
+  "joints": [
+    {
+      "id": "forearm_fix",
+      "type": "fixed",
+      "parent": "stand",
+      "child": "forearm",
+      "position": [
+        0,
+        8,
+        0
+      ]
+    },
+    {
+      "id": "wrist_mount_fix",
+      "type": "fixed",
+      "parent": "forearm",
+      "child": "wrist_mount",
+      "position": [
+        0,
+        200,
+        0
+      ]
+    },
+    {
+      "id": "wrist_rot",
+      "type": "revolute",
+      "parent": "wrist_mount",
+      "child": "wrist_yoke",
+      "position": [
+        -5.65,
+        37,
+        0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "limits": [
+        -90,
+        90
+      ],
+      "drive": {
+        "device": "servo16",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -90,
+          90
+        ]
+      }
+    },
+    {
+      "id": "wrist_pitch",
+      "type": "revolute",
+      "parent": "wrist_yoke",
+      "child": "palm",
+      "position": [
+        -10.35,
+        11.9,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        -45,
+        45
+      ],
+      "drive": {
+        "device": "servo17",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -45,
+          45
+        ]
+      }
+    },
+    {
+      "id": "index_abd",
+      "type": "revolute",
+      "parent": "palm",
+      "child": "index_knuckle",
+      "position": [
+        -17,
+        146,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "limits": [
+        -15,
+        15
+      ],
+      "drive": {
+        "device": "servo12",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -15,
+          15
+        ]
+      }
+    },
+    {
+      "id": "index_mcp",
+      "type": "revolute",
+      "parent": "index_knuckle",
+      "child": "index_prox",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        90
+      ],
+      "drive": {
+        "device": "servo1",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "index_pip",
+      "type": "revolute",
+      "parent": "index_prox",
+      "child": "index_mid",
+      "position": [
+        0,
+        42,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        100
+      ],
+      "drive": {
+        "device": "servo2",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          100
+        ]
+      }
+    },
+    {
+      "id": "index_dip",
+      "type": "revolute",
+      "parent": "index_mid",
+      "child": "index_dist",
+      "position": [
+        0,
+        26,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        80
+      ],
+      "drive": {
+        "follow": "index_pip",
+        "ratio": 0.7
+      }
+    },
+    {
+      "id": "middle_abd",
+      "type": "revolute",
+      "parent": "palm",
+      "child": "middle_knuckle",
+      "position": [
+        5,
+        146,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "limits": [
+        -10,
+        10
+      ],
+      "drive": {
+        "device": "servo13",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -10,
+          10
+        ]
+      }
+    },
+    {
+      "id": "middle_mcp",
+      "type": "revolute",
+      "parent": "middle_knuckle",
+      "child": "middle_prox",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        90
+      ],
+      "drive": {
+        "device": "servo3",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "middle_pip",
+      "type": "revolute",
+      "parent": "middle_prox",
+      "child": "middle_mid",
+      "position": [
+        0,
+        46,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        100
+      ],
+      "drive": {
+        "device": "servo4",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          100
+        ]
+      }
+    },
+    {
+      "id": "middle_dip",
+      "type": "revolute",
+      "parent": "middle_mid",
+      "child": "middle_dist",
+      "position": [
+        0,
+        30,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        80
+      ],
+      "drive": {
+        "follow": "middle_pip",
+        "ratio": 0.7
+      }
+    },
+    {
+      "id": "ring_abd",
+      "type": "revolute",
+      "parent": "palm",
+      "child": "ring_knuckle",
+      "position": [
+        27,
+        146,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "limits": [
+        -10,
+        10
+      ],
+      "drive": {
+        "device": "servo14",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -10,
+          10
+        ]
+      }
+    },
+    {
+      "id": "ring_mcp",
+      "type": "revolute",
+      "parent": "ring_knuckle",
+      "child": "ring_prox",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        90
+      ],
+      "drive": {
+        "device": "servo5",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "ring_pip",
+      "type": "revolute",
+      "parent": "ring_prox",
+      "child": "ring_mid",
+      "position": [
+        0,
+        43,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        100
+      ],
+      "drive": {
+        "device": "servo6",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ring_dip",
+      "type": "revolute",
+      "parent": "ring_mid",
+      "child": "ring_dist",
+      "position": [
+        0,
+        28,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        80
+      ],
+      "drive": {
+        "follow": "ring_pip",
+        "ratio": 0.7
+      }
+    },
+    {
+      "id": "little_abd",
+      "type": "revolute",
+      "parent": "palm",
+      "child": "little_knuckle",
+      "position": [
+        49,
+        146,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "limits": [
+        -15,
+        15
+      ],
+      "drive": {
+        "device": "servo15",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          -15,
+          15
+        ]
+      }
+    },
+    {
+      "id": "little_mcp",
+      "type": "revolute",
+      "parent": "little_knuckle",
+      "child": "little_prox",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        90
+      ],
+      "drive": {
+        "device": "servo7",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "little_pip",
+      "type": "revolute",
+      "parent": "little_prox",
+      "child": "little_mid",
+      "position": [
+        0,
+        35,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        100
+      ],
+      "drive": {
+        "device": "servo8",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          100
+        ]
+      }
+    },
+    {
+      "id": "little_dip",
+      "type": "revolute",
+      "parent": "little_mid",
+      "child": "little_dist",
+      "position": [
+        0,
+        22,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        80
+      ],
+      "drive": {
+        "follow": "little_pip",
+        "ratio": 0.7
+      }
+    },
+    {
+      "id": "thumb_rot",
+      "type": "revolute",
+      "parent": "palm",
+      "child": "thumb_base",
+      "position": [
+        -34,
+        70,
+        6
+      ],
+      "rotation": [
+        0,
+        0,
+        45
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "limits": [
+        0,
+        90
+      ],
+      "drive": {
+        "device": "servo9",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "thumb_cmc",
+      "type": "revolute",
+      "parent": "thumb_base",
+      "child": "thumb_meta",
+      "position": [
+        0,
+        14,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        60
+      ],
+      "drive": {
+        "device": "servo10",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          60
+        ]
+      }
+    },
+    {
+      "id": "thumb_mcp",
+      "type": "revolute",
+      "parent": "thumb_meta",
+      "child": "thumb_prox",
+      "position": [
+        0,
+        34,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        70
+      ],
+      "drive": {
+        "device": "servo11",
+        "from": [
+          0,
+          180
+        ],
+        "to": [
+          0,
+          70
+        ]
+      }
+    },
+    {
+      "id": "thumb_ip",
+      "type": "revolute",
+      "parent": "thumb_prox",
+      "child": "thumb_dist",
+      "position": [
+        0,
+        28,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "limits": [
+        0,
+        80
+      ],
+      "drive": {
+        "follow": "thumb_mcp",
+        "ratio": 0.9
+      }
+    }
+  ],
+  "mounts": [
+    {
+      "device": "servo1",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -43.65,
+        40,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo2",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -5.65,
+        40,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo3",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        32.35,
+        40,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo4",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -43.65,
+        72,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo5",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -5.65,
+        72,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo6",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        32.35,
+        72,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo7",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -43.65,
+        104,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo8",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -5.65,
+        104,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo9",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        32.35,
+        104,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo10",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -43.65,
+        136,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo11",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -5.65,
+        136,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo12",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        32.35,
+        136,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo13",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -43.65,
+        168,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo14",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        -5.65,
+        168,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo15",
+      "kind": "servo",
+      "link": "forearm",
+      "position": [
+        32.35,
+        168,
+        -16.75
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "device": "servo16",
+      "kind": "servo",
+      "link": "wrist_mount",
+      "position": [
+        -5.65,
+        6,
+        0
+      ]
+    },
+    {
+      "device": "servo17",
+      "kind": "servo",
+      "link": "wrist_yoke",
+      "position": [
+        20.65,
+        11.9,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ]
+    }
+  ],
+  "hardware": [
+    {
+      "item": "M2 screw used as hinge axle",
+      "qty": 19,
+      "note": "one per finger hinge and knuckle; 2.4 mm clearance holes"
+    },
+    {
+      "item": "M2 screw (servo tabs)",
+      "qty": 34,
+      "note": "usually supplied with the SG90; measure your servo's tab hole spacing and drill the bed"
+    },
+    {
+      "item": "M3 screw (stand to bench)",
+      "qty": 4
+    },
+    {
+      "item": "Braided line for tendons",
+      "qty": 30,
+      "note": "flexor and extensor per driven joint; 1.6 mm channels"
+    },
+    {
+      "item": "PTFE tube (tendon sheath)",
+      "qty": 1,
+      "note": "cut one sheath per tendon run from the bed to the palm"
+    },
+    {
+      "item": "Elastic cord or torsion spring (finger return)",
+      "qty": 5
+    }
+  ],
+  "notes": [
+    "Kinematics only: tendon stretch, friction and grip force are not simulated; the tip joints follow the middle joints by fixed ratios (0.7 fingers, 0.9 thumb).",
+    "17 servos need their own 5 V supply (the template uses a bench supply) with its ground shared by both boards.",
+    "The SG90 pockets are the case outline plus 0.2 mm per side; the tab screw holes are not in a drawing we could read — mark them from your servos.",
+    "Board U1 drives flexion and the thumb (11 servos), U2 spread and wrist (6): the Arduino Servo library runs at most 12 servos on an Uno."
+  ]
+}

@@ -9,6 +9,9 @@ import serialEchoIno from '../../examples/serial-echo/serial-echo.ino?raw';
 import serialPingIno from '../../examples/serial-ping/serial-ping.ino?raw';
 import armAssembly from '../../examples/robot-arm/robot-arm.assembly.json';
 import handAssembly from '../../examples/robot-hand/robot-hand.assembly.json';
+import dexterousAssembly from '../../examples/dexterous-hand/dexterous-hand.assembly.json';
+import dexterousIno from '../../examples/dexterous-hand/dexterous-hand.ino?raw';
+import dexterousWristIno from '../../examples/dexterous-hand-wrist/dexterous-hand-wrist.ino?raw';
 import { validateAssembly, type Assembly } from '../mech/assembly';
 import { DEVICES, type DeviceKind, type DeviceProps } from './devices';
 
@@ -202,6 +205,14 @@ export const TEMPLATES: Template[] = [
     },
   },
   {
+    id: 'dexterous-hand',
+    title: 'Dexterous hand, 17 DOF',
+    summary: 'Finger spread, knuckle and middle flex, thumb opposition, wrist rotation and pitch: 17 SG90s on two boards and a 5 V bench supply, printable servo bed.',
+    hex: 'dexterous-hand',
+    hexes: { uno2: 'dexterous-hand-wrist' },
+    project: dexterousProject(),
+  },
+  {
     id: 'two-boards',
     title: 'Two boards over serial',
     summary: 'U1 sends "ping n" from its TX (D1) to the RX (D0) of U2, which toggles its L LED and prints what it got. Shared ground.',
@@ -217,6 +228,32 @@ export const TEMPLATES: Template[] = [
     },
   },
 ];
+
+/** U1 runs servos 1–11 on D2–D12 (flexion, thumb), U2 servos 12–17 on D2–D7 (spread, wrist); all on a 5 V supply. */
+function dexterousProject(): Project {
+  const servos: Device[] = Array.from({ length: 17 }, (_, i) => ({
+    id: `servo${i + 1}`,
+    kind: 'servo',
+    x: 440 + (i % 3) * 190,
+    y: -300 + Math.floor(i / 3) * 95,
+    props: {},
+  }));
+  const wires: Wire[] = [];
+  servos.forEach((s, i) => {
+    const [board, pin] = i < 11 ? ['uno', `D${i + 2}`] : ['uno2', `D${i - 11 + 2}`];
+    wires.push(w(`${s.id}.SIG`, `${board}.${pin}`, '#f28c1a'), w(`${s.id}.V+`, 'psu1.+', '#e53935'), w(`${s.id}.GND`, 'psu1.-', '#1f1f1f'));
+  });
+  wires.push(w('psu1.-', 'uno.GND1', '#1f1f1f'), w('psu1.-', 'uno2.GND1', '#1f1f1f'), w('uno.D1', 'uno2.D0', '#3d7bff'));
+  return {
+    version: 1,
+    name: 'Dexterous hand, 17 DOF',
+    devices: [UNO, { id: 'uno2', kind: 'uno', x: 0, y: 380, props: {} }, ...servos, { id: 'psu1', kind: 'psu', x: 1060, y: 120, props: { volts: 5 } }],
+    wires,
+    code: dexterousIno,
+    sketches: { uno2: dexterousWristIno },
+    assembly: dexterousAssembly as Assembly,
+  };
+}
 
 function stepperWires(): Wire[] {
   return [
