@@ -99,6 +99,8 @@ export default function App() {
   const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
   const [labSel, setLabSel] = useState<string | null>(null);
   const electrical = useRef(electricalKey(project));
+  /** Undo/redo history of the whole project (JSON snapshots), recorded 400 ms after the last change. */
+  const history = useRef({ past: [] as string[], future: [] as string[], last: JSON.stringify(project), restoring: false });
   const pressStart = useRef(0);
 
   const refs = useMemo(() => designators(project), [project]);
@@ -143,6 +145,62 @@ export default function App() {
     },
     [firmwares, boot],
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const h = history.current;
+      const cur = JSON.stringify(project);
+      if (h.restoring) {
+        h.restoring = false;
+        h.last = cur;
+        return;
+      }
+      if (cur !== h.last) {
+        h.past.push(h.last);
+        if (h.past.length > 100) h.past.shift();
+        h.future = [];
+        h.last = cur;
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [project]);
+
+  const restore = (json: string) => {
+    const p = parseProject(json);
+    history.current.restoring = true;
+    setProject(p);
+    electrical.current = electricalKey(p);
+    boot(p, programs(firmwares));
+  };
+  const undo = () => {
+    const h = history.current;
+    const cur = JSON.stringify(project);
+    if (cur !== h.last) (h.past.push(h.last), (h.last = cur));
+    const prev = h.past.pop();
+    if (!prev) return;
+    h.future.push(h.last);
+    h.last = prev;
+    restore(prev);
+  };
+  const redo = () => {
+    const h = history.current;
+    const next = h.future.pop();
+    if (!next) return;
+    h.past.push(h.last);
+    h.last = next;
+    restore(next);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) (e.preventDefault(), undo());
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) (e.preventDefault(), redo());
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const loadTemplate = async (t: Template) => {
     const p = cloneProject(t.project);
@@ -464,6 +522,8 @@ export default function App() {
         <Section n="03" title="Project" />
         <div className="file-row">
           <button onClick={newBench}>New</button>
+          <button onClick={undo} title="Undo (Ctrl+Z)">Undo</button>
+          <button onClick={redo} title="Redo (Ctrl+Y)">Redo</button>
           <label className="file-btn">
             Open
             <input type="file" accept=".json,.hex" onChange={(e) => e.target.files?.[0] && void openFile(e.target.files[0])} />
@@ -528,6 +588,19 @@ export default function App() {
           {tab === 'wiring' && (
             <>
               <Wiring project={project} onChange={update} selection={selection} onSelect={setSelection} snapshot={snapshot} refs={refs} onPress={press} />
+              {project.devices.length === 0 && (
+                <div className="empty-bench">
+                  <strong>The bench is empty</strong>
+                  <span>Add parts from the shelf on the left, or load a template — try <em>Five-finger robot hand</em>.</span>
+                  <span>
+                    The 3D prototype is in{' '}
+                    <button className="link-btn" onClick={() => setTab('3d')}>
+                      FIG. 2 — 3D LAB
+                    </button>
+                    . Deleted something by accident? <button className="link-btn" onClick={undo}>Undo</button> (Ctrl+Z).
+                  </span>
+                </div>
+              )}
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />
                 <span className="crop tr" />

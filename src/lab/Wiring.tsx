@@ -94,7 +94,7 @@ export default function Wiring({ project, onChange, selection, onSelect, snapsho
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.key === 'Escape') setPending(null);
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
+      if (e.key === 'Delete' && selection) {
         if (selection.type === 'wire') onChange({ ...project, wires: project.wires.filter((w) => w.id !== selection.id) }, true);
         else
           onChange(

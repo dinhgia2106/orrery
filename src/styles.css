@@ -420,3 +420,7 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .mount-row { display: grid; gap: 3px; border-left: 2px solid var(--amber); padding-left: 6px; }
 .link-danger { border: 0 !important; background: none !important; color: var(--danger) !important; cursor: pointer; font: 11px var(--mono); }
 .lab-panel .primary { font-size: 12px; }
+.file-row { grid-template-columns: repeat(3, 1fr); }
+.empty-bench { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; max-width: 420px; padding: 16px 18px; text-align: center; background: rgba(255,255,255,0.94); border: 1px dashed var(--ink-soft); border-radius: 4px; color: var(--muted); font-size: 13px; z-index: 2; }
+.empty-bench strong { color: var(--ink); font-size: 14px; letter-spacing: 0.04em; }
+.link-btn { border: 0; background: none; padding: 0; color: var(--ink); text-decoration: underline; cursor: pointer; font: inherit; }
