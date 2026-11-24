@@ -14,6 +14,7 @@
     "compiler": "node scripts/compile-server.mjs"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
     "@react-three/drei": "9.117.3",
     "@react-three/fiber": "8.17.10",
     "avr8js": "0.21.1",

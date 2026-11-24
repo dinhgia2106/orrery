@@ -43,7 +43,9 @@ The mechanism is simulated with **statics under gravity**, computed from the rea
 - **Actuators feel it**: an SG90 follows the straight torque–speed line between its no-load speed (60°/0.1 s) and stall torque (1.8 kgf·cm), so it slows under load and stalls at 1.8 kgf·cm; a NEMA 17 loses steps above its 3.7 kgf·cm holding torque. Loads, % of limit and stalls show in the 3D lab and the checks.
 - **Collisions**: *Check collisions in this pose* intersects every pair of made parts (parts joined directly by a joint are skipped) and reports the overlap in mm³; clashing parts turn red.
 
-Not modelled: inertia and acceleration, friction, tendon stretch, bending or breaking of parts, shaft side loads, contact forces (a grip's force on an object), and continuous collision during motion. Prismatic-joint forces are not computed yet.
+- **Dynamics (Rapier)**: switch on *Dynamics* in the 3D lab and every part becomes a rigid body with its real mass and the inertia of its shape, under standard gravity (9.80665 m/s²). Joints are driven by motors whose torque is limited to the SG90 stall torque or the NEMA 17 holding torque through each transmission (tendon followers track their source joint's real angle), so an overloaded joint sags or swings instead of holding; parts touch the bench and loose objects you drop (a 30 mm PLA ball or a 25 mm cube); commanded vs reached joint angles show where the mechanism cannot keep up. Verified against a physical pendulum: a 100 mm bar swings with the period 2π√(I/(m·g·d)) within 2 %.
+
+Not modelled: friction values (Rapier's default 0.5, not measured), tendon stretch, bending or breaking of parts, shaft side loads, part-to-part contact while moving (the interference check covers clashes in a pose), and prismatic joints in the dynamics (held fixed). The joint motors' position gain is a control choice, not a datasheet value.
 
 ### Compiling your sketch
 

@@ -20,7 +20,8 @@ import {
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
 import { patchJoint } from './mech/edit';
-import { interference, massProperties, type Clash, type MassProps } from './mech/physics';
+import { Dynamics, loadRapier } from './mech/dynamics';
+import { interference, linkFrames, massProperties, type Clash, type MassProps } from './mech/physics';
 import LabPanel from './mech/LabPanel';
 import { aiPrompt, assemblyFromStl, jointValues, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
@@ -106,6 +107,10 @@ export default function App() {
   const [massProps, setMassProps] = useState<Map<string, MassProps> | null>(null);
   const [clashes, setClashes] = useState<Clash[] | null>(null);
   const [checking, setChecking] = useState(false);
+  /** Rigid-body dynamics (Rapier) of the mechanism, when switched on. */
+  const dynRef = useRef<Dynamics | null>(null);
+  const [dynOn, setDynOn] = useState(false);
+  const [dynGen, setDynGen] = useState(0);
 
   /** Hand the mechanism to the simulation, if its masses are known for this exact assembly. */
   const applyMech = useCallback(
@@ -163,6 +168,43 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [project.assembly, sim]);
+
+  // build the dynamics world for the current mechanism (rebuilt when it changes or on reset)
+  useEffect(() => {
+    const asm = project.assembly;
+    if (!dynOn || !asm || !massProps || massRef.current?.key !== JSON.stringify(asm)) {
+      dynRef.current?.dispose();
+      dynRef.current = null;
+      setDynGen((g) => g + 1);
+      return;
+    }
+    let alive = true;
+    void loadRapier().then((lib) => {
+      if (!alive) return;
+      const s = sim.current;
+      const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+      const start = jointValues(asm, (d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined));
+      dynRef.current?.dispose();
+      dynRef.current = new Dynamics(lib, asm, massProps, start);
+      setDynGen((g) => g + 1);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynOn, massProps, project.assembly]);
+
+  /** Drop a loose PLA ball or cube above the mechanism. */
+  const drop = (kind: 'ball' | 'box') => {
+    const asm = project.assembly;
+    const d = dynRef.current;
+    if (!asm || !d) return;
+    const frames = linkFrames(asm, new Map());
+    let top = 0;
+    for (const m of frames.values()) top = Math.max(top, m.elements[13]);
+    const [x, , z] = asm.placement ?? [150, 0, 0];
+    d.drop(kind, kind === 'ball' ? 30 : 25, [x + 16, top + 80, z + 25]);
+  };
 
   const checkClashes = async () => {
     const asm = project.assembly;
@@ -692,9 +734,11 @@ export default function App() {
             <>
               <Suspense fallback={<div className="loading mono">LOADING 3D SCENE…</div>}>
                 <Scene
+                  key={`scene-${dynGen}`}
                   sim={sim}
                   project={project}
                   section={section}
+                  dyn={dynRef}
                   lab={{
                     selected: labSel,
                     onSelect: setLabSel,
@@ -711,7 +755,31 @@ export default function App() {
                 selected={labSel}
                 onSelect={setLabSel}
                 download={download}
-                physics={{ massProps, actuators: snapshot?.actuators ?? [], totalMassG: snapshot?.mechanismMassG ?? null, clashes, checking, onCheck: () => void checkClashes() }}
+                physics={{
+                  massProps,
+                  actuators: snapshot?.actuators ?? [],
+                  totalMassG: snapshot?.mechanismMassG ?? null,
+                  clashes,
+                  checking,
+                  onCheck: () => void checkClashes(),
+                  dynamics: {
+                    on: dynOn,
+                    ready: !!dynRef.current,
+                    setOn: setDynOn,
+                    reset: () => {
+                      // switching off disposes the world; switching back on rebuilds it from the current pose
+                      setDynOn(false);
+                      setTimeout(() => setDynOn(true), 0);
+                    },
+                    drop,
+                    tracking: () => {
+                      const s = sim.current;
+                      const asm = project.assembly;
+                      const stepper = new Set((asm?.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+                      return dynRef.current?.tracking((d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined)) ?? [];
+                    },
+                  },
+                }}
               />
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />

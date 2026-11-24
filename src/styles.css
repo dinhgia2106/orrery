@@ -439,3 +439,4 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .loads tr.over .load-bar { background: var(--danger); }
 .loads tr.over td { color: var(--danger); }
 .clash { cursor: pointer; color: var(--danger); }
+.dyn { border-top: 1px dashed var(--line-strong); padding-top: 6px; display: grid; gap: 5px; }

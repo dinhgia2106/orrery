@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject, type React
 import { BufferAttribute, BufferGeometry, CatmullRomCurve3, DoubleSide, Material, Mesh as ThreeMesh, MeshBasicMaterial, MeshStandardMaterial as StdMaterial, Plane, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { jointValues, type Assembly, type Joint, type Link, type Mount, type Vec3 } from './mech/assembly';
+import type { Dynamics } from './mech/dynamics';
 import { partMesh } from './mech/fabricate';
 import { DEVICES } from './lab/devices';
 import type { LabSimulation } from './lab/labsim';
@@ -611,6 +612,61 @@ function JointNode({ joint, render, values, lab }: { joint: Joint; render: (link
   );
 }
 
+/** The mechanism as Rapier moves it: every link at its own world pose, loose objects too. */
+function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRef; dyn: MutableRefObject<Dynamics | null>; lab?: LabControls }) {
+  const groups = useRef(new Map<string, Group>());
+  const loose = useRef<Group>(null);
+  const last = useRef<number | null>(null);
+  const [looseList, setLooseList] = useState<{ id: string; kind: 'ball' | 'box'; sizeMm: number }[]>([]);
+  useFrame((_, delta) => {
+    const d = dyn.current;
+    if (!d) return;
+    const s = sim.current;
+    // follow simulated time (pausing the bench pauses physics); without a bench, follow the clock
+    const now = s ? s.time : (last.current ?? 0) + delta;
+    const dt = last.current === null ? 0 : Math.min(0.05, Math.max(0, now - last.current));
+    last.current = now;
+    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+    d.step(dt, (dev) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined));
+    for (const [id, pose] of d.poses()) {
+      const g = groups.current.get(id);
+      if (!g) continue;
+      g.position.set(...pose.p);
+      g.quaternion.set(...pose.q);
+    }
+    const lp = d.loosePoses();
+    if (lp.length !== looseList.length) setLooseList(lp.map(({ id, kind, sizeMm }) => ({ id, kind, sizeMm })));
+    lp.forEach((l, i) => {
+      const g = loose.current?.children[i];
+      if (g) (g.position.set(...l.pose.p), g.quaternion.set(...l.pose.q));
+    });
+  });
+  return (
+    <>
+      {asm.links.map((link) => (
+        <group key={link.id} ref={(g) => (g ? groups.current.set(link.id, g) : groups.current.delete(link.id))}>
+          <LinkShape link={link} selected={lab?.selected === link.id} clash={lab?.clashing?.has(link.id)} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
+          {(asm.mounts ?? [])
+            .filter((m) => m.link === link.id)
+            .map((m) => (
+              <group key={m.device} position={m.position} rotation={rad(m.rotation)}>
+                <MountedDevice mount={m} sim={sim} />
+              </group>
+            ))}
+        </group>
+      ))}
+      <group ref={loose}>
+        {looseList.map((l) => (
+          <mesh key={l.id} castShadow>
+            {l.kind === 'ball' ? <sphereGeometry args={[l.sizeMm / 2, 32, 24]} /> : <boxGeometry args={[l.sizeMm, l.sizeMm, l.sizeMm]} />}
+            <meshStandardMaterial color="#f5b942" roughness={0.6} />
+          </mesh>
+        ))}
+      </group>
+    </>
+  );
+}
+
 function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: LabControls }) {
   const values = useJointValues(asm, sim);
   const byParent = useMemo(() => {
@@ -771,7 +827,7 @@ function SectionCut({ section }: { section?: Section }) {
   );
 }
 
-export default function Scene({ sim, project, lab, section }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section }) {
+export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section; dyn?: MutableRefObject<Dynamics | null> }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
   const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
@@ -852,7 +908,7 @@ export default function Scene({ sim, project, lab, section }: { sim: SimRef; pro
         {boards.map((b) => (
           <Uno key={b.id} at={place.get(b.id)} level={() => sim.current?.builtinLed(b.id) ?? 0} />
         ))}
-        {asm && <AssemblyView asm={asm} sim={sim} lab={lab} />}
+        {asm && (dyn?.current ? <DynamicAssemblyView asm={asm} sim={sim} dyn={dyn} lab={lab} /> : <AssemblyView asm={asm} sim={sim} lab={lab} />)}
         {nodes}
         {wires}
       </group>

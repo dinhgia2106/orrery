@@ -10,6 +10,14 @@ import { DENSITY, type ActuatorLoad, type Clash, type MassProps } from './physic
 import { CLEARANCE_HOLE_MM, DEFAULT_CLEARANCE_MM } from './solid';
 
 export interface PhysicsView {
+  dynamics: {
+    on: boolean;
+    ready: boolean;
+    setOn: (on: boolean) => void;
+    reset: () => void;
+    drop: (kind: 'ball' | 'box') => void;
+    tracking: () => { device: string; commanded: number; actual: number }[];
+  };
   massProps: Map<string, MassProps> | null;
   actuators: ActuatorLoad[];
   totalMassG: number | null;
@@ -279,7 +287,49 @@ function PhysicsBlock({ physics, asm, onSelect }: { physics: PhysicsView; asm: A
         </div>
       ))}
       {asm.joints.some((j) => j.type === 'prismatic' && j.drive) && <p className="small muted">Prismatic joints: forces along the slide are not computed yet.</p>}
+      <DynamicsBlock d={physics.dynamics} />
     </Block>
+  );
+}
+
+/** Rapier rigid-body dynamics: inertia, gravity, torque-limited motors, contacts with the bench and loose objects. */
+function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
+  const track = d.on && d.ready ? d.tracking() : [];
+  const lagging = track.filter((t) => Math.abs(t.commanded - t.actual) > 5);
+  return (
+    <div className="dyn">
+      <label className="section-toggle mono">
+        <input type="checkbox" checked={d.on} onChange={(e) => d.setOn(e.target.checked)} /> DYNAMICS (Rapier)
+        {d.on && !d.ready && <span className="muted"> loading…</span>}
+      </label>
+      {d.on && d.ready && (
+        <>
+          <div className="lab-row">
+            <button onClick={() => d.drop('ball')}>drop 30 mm ball</button>
+            <button onClick={() => d.drop('box')}>drop 25 mm cube</button>
+            <button onClick={d.reset}>reset</button>
+          </div>
+          <p className="small muted">
+            Inertia and gravity on every part; joint motors limited to the SG90 stall (1.8 kgf·cm) or NEMA 17 holding torque through each transmission; parts touch the bench and loose objects.
+          </p>
+          {lagging.length ? (
+            <table className="loads mono">
+              <tbody>
+                {lagging.slice(0, 8).map((t) => (
+                  <tr key={t.device} className="over">
+                    <td>{t.device}</td>
+                    <td>cmd {t.commanded.toFixed(0)}°</td>
+                    <td>at {t.actual.toFixed(0)}°</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="small ok mono">every joint tracks its actuator (within 5°)</p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
