@@ -15,6 +15,7 @@ import {
   type Project,
   type Template,
 } from './lab/project';
+import { BLANK_PROGRAM } from './lab/labsim';
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
 import { aiPrompt, assemblyFromStl, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
@@ -85,6 +86,7 @@ export default function App() {
   const pressStart = useRef(0);
 
   const refs = useMemo(() => designators(project), [project]);
+  const hasBoard = project.devices.some((d) => d.kind === 'uno');
 
   // autosave
   useEffect(() => {
@@ -102,7 +104,8 @@ export default function App() {
   // first run: if the project is an unchanged template, load its prebuilt firmware
   useEffect(() => {
     const t = TEMPLATES.find((x) => x.project.code === project.code);
-    if (t)
+    boot(project, BLANK_PROGRAM);
+    if (t && project.devices.some((d) => d.kind === 'uno'))
       void fetchTemplateHex(t)
         .then((program) => {
           setFirmware({ program, code: t.project.code, label: `${t.title} (prebuilt)` });
@@ -116,7 +119,7 @@ export default function App() {
     (next: Project, isElectrical: boolean) => {
       setProject(next);
       const key = electricalKey(next);
-      if (isElectrical && key !== electrical.current && firmware) boot(next, firmware.program); // rewiring = power-cycling the bench
+      if (isElectrical && key !== electrical.current) boot(next, firmware?.program ?? BLANK_PROGRAM); // rewiring = power-cycling the bench
       electrical.current = key;
     },
     [firmware, boot],
@@ -150,9 +153,23 @@ export default function App() {
     } else setTab('code');
   };
 
+  /** The first spot on a 20-unit grid, right of the board area, where the new part's outline is clear of others. */
+  const freeSpot = (kind: DeviceKind): [number, number] => {
+    if (kind === 'uno' && !project.devices.some((d) => overlaps(d, 0, 0, DEVICES.uno.w, DEVICES.uno.h))) return [0, 0];
+    const { w, h } = DEVICES[kind];
+    for (let row = 0; row < 40; row++)
+      for (let col = 0; col < 12; col++) {
+        // right of the board when there is one; from the top-left of the default view otherwise
+        const x = (hasBoard ? 400 : 0) + col * 20 * 4;
+        const y = (hasBoard ? -260 : -180) + row * 20 * 2;
+        if (!project.devices.some((d) => overlaps(d, x, y, w, h))) return [x, y];
+      }
+    return [hasBoard ? 400 : 0, hasBoard ? -260 : -180];
+  };
+
   const addDevice = (kind: DeviceKind) => {
-    const others = project.devices.filter((d) => d.kind !== 'uno').length;
-    const d = newDevice(kind, project.devices, 420 + (others % 4) * 40, -200 + (others % 6) * 70);
+    const [x, y] = freeSpot(kind);
+    const d = newDevice(kind, project.devices, x, y);
     update({ ...project, devices: [...project.devices, d] }, true);
     setSelection({ type: 'device', id: d.id });
     setTab('wiring');
@@ -170,7 +187,7 @@ export default function App() {
         setProject(p);
         electrical.current = electricalKey(p);
         setSelection(null);
-        if (firmware) boot(p, firmware.program);
+        boot(p, firmware?.program ?? BLANK_PROGRAM);
       }
       setNotice(null);
     } catch (e) {
@@ -299,7 +316,18 @@ export default function App() {
     }
   };
 
-  const restart = () => firmware && boot(project, firmware.program);
+  const restart = () => boot(project, firmware?.program ?? BLANK_PROGRAM);
+  const fwLabel = hasBoard ? firmware?.label ?? 'blank chip' : 'no board';
+
+  const newBench = () => {
+    const p = blankProject();
+    setFirmware(null);
+    setResult(null);
+    setSelection(null);
+    setProject(p);
+    electrical.current = electricalKey(p);
+    boot(p, BLANK_PROGRAM);
+  };
   const stale = !!firmware && firmware.code !== null && firmware.code !== project.code;
   const selDevice = selection?.type === 'device' ? project.devices.find((d) => d.id === selection.id) : undefined;
   const selWire = selection?.type === 'wire' ? project.wires.find((w) => w.id === selection.id) : undefined;
@@ -344,7 +372,7 @@ export default function App() {
           <span className={`dot ${running ? 'on' : ''}`} />
           <span className="readout">
             <i>FW</i>
-            {firmware?.label ?? '—'}
+            {fwLabel}
             {stale && <em title="The code changed since this firmware was built"> · edited</em>}
           </span>
           <span className="readout">
@@ -365,7 +393,7 @@ export default function App() {
             const item = CATALOG[DEVICES[k].catalog];
             return (
               <li key={k}>
-                <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`}>
+                <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`} disabled={k === 'uno' && hasBoard}>
                   <span className="ref mono">{DEVICES[k].refPrefix}</span>
                   <span className="shelf-name">
                     <strong>{DEVICES[k].title}</strong>
@@ -379,8 +407,8 @@ export default function App() {
         </ul>
 
         <Section n="02" title="Run" />
-        <button className="primary wide" onClick={() => void compileAndRun()} disabled={compiling}>
-          {compiling ? 'Compiling…' : 'Compile & run sketch'}
+        <button className="primary wide" onClick={() => void compileAndRun()} disabled={compiling || !hasBoard} title={hasBoard ? undefined : 'Add an Arduino from the shelf to run a sketch'}>
+          {compiling ? 'Compiling…' : hasBoard ? 'Compile & run sketch' : 'Add a board to run a sketch'}
         </button>
         <p className={`helper mono ${helper ? 'ok' : 'off'}`}>
           {helper === undefined ? 'checking compile helper…' : helper ? '● compile helper connected' : '○ no compile helper — run "npm run compiler"'}
@@ -389,7 +417,7 @@ export default function App() {
           <button onClick={() => setRunning(!running)} disabled={!sim.current || !!sim.current?.fatal.length}>
             {running ? 'Pause' : 'Run'}
           </button>
-          <button onClick={restart} disabled={!firmware}>
+          <button onClick={restart} disabled={!sim.current}>
             Reset
           </button>
         </div>
@@ -403,7 +431,7 @@ export default function App() {
 
         <Section n="03" title="Project" />
         <div className="file-row">
-          <button onClick={() => update(blankProject(), true)}>New</button>
+          <button onClick={newBench}>New</button>
           <label className="file-btn">
             Open
             <input type="file" accept=".json,.hex" onChange={(e) => e.target.files?.[0] && void openFile(e.target.files[0])} />
@@ -477,7 +505,7 @@ export default function App() {
                   click a pin, then another pin, to run a wire
                   <small>drag parts · drag the background to pan · wheel to zoom · Delete removes the selection</small>
                 </div>
-                <TitleBlock project={project} firmware={firmware?.label} />
+                <TitleBlock project={project} firmware={fwLabel} />
               </div>
             </>
           )}
@@ -500,7 +528,7 @@ export default function App() {
                 <div className="grid-note mono">
                   <span className="grid-swatch" /> GRID 10 mm
                 </div>
-                <TitleBlock project={project} firmware={firmware?.label} />
+                <TitleBlock project={project} firmware={fwLabel} />
               </div>
             </>
           )}
@@ -542,11 +570,9 @@ export default function App() {
             )}
             <StateList state={snapshot?.devices[selDevice.id]} />
             {selDevice.kind === 'uno' && <p className="muted small">Hover a header pin in the wiring view to see its mode and voltage.</p>}
-            {selDevice.id !== 'uno' && (
-              <button className="danger" onClick={() => removeDevice(selDevice.id)}>
-                Remove {refs[selDevice.id]}
-              </button>
-            )}
+            <button className="danger" onClick={() => removeDevice(selDevice.id)}>
+              Remove {refs[selDevice.id]}
+            </button>
           </div>
         ) : selWire ? (
           <div className="card inspector">
@@ -578,7 +604,11 @@ export default function App() {
             </button>
           </div>
         ) : (
-          <p className="muted small">Select a part or a wire. Add parts from the shelf, wire them pin to pin, write the sketch, then Compile &amp; run.</p>
+          <p className="muted small">
+            {project.devices.length === 0
+              ? 'The bench is empty. Take parts from the shelf — a board, a bench supply, anything — and wire them pin to pin.'
+              : 'Select a part or a wire. Wire parts pin to pin; with a board on the bench, write the sketch and Compile & run.'}
+          </p>
         )}
 
         {instruments.length > 0 && (
@@ -639,6 +669,9 @@ export default function App() {
         )}
 
         <Section n="09" title="Power · 5 V rail" />
+        {!hasBoard && <p className="muted small">No board on the bench: bench supplies power the circuit directly.</p>}
+        {hasBoard && (
+        <>
         <div className={`gauge ${railMa > limit ? 'over' : ''}`}>
           <div className="gauge-bar">
             <span className="gauge-fill" style={{ width: `${Math.min(100, (railMa / gaugeMax) * 100)}%` }} />
@@ -653,6 +686,8 @@ export default function App() {
           </p>
         </div>
         <p className="muted small">Solved from your wiring; the Uno's own draw and servo current are approximations.</p>
+        </>
+        )}
 
         <Section n="10" title="Serial monitor" />
         <pre className="serial">{snapshot?.serial || '—'}</pre>
@@ -769,6 +804,13 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/** Whether a part placed at (x, y) with size w × h would touch device d (with room for labels and pins). */
+function overlaps(d: { kind: DeviceKind; x: number; y: number }, x: number, y: number, w: number, h: number): boolean {
+  const m = 30;
+  const def = DEVICES[d.kind];
+  return x < d.x + def.w + m && x + w + m > d.x && y < d.y + def.h + m && y + h + m > d.y;
 }
 
 function StateList({ state }: { state?: Record<string, number | boolean | string> }) {

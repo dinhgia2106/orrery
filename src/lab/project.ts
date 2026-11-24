@@ -50,6 +50,7 @@ export function defaultWireColor(a: string, b: string, index: number): string {
 const UNO: Device = { id: 'uno', kind: 'uno', x: 0, y: 0, props: {} };
 
 export function newDevice(kind: DeviceKind, existing: Device[], x: number, y: number): Device {
+  if (kind === 'uno') return { id: 'uno', kind, x, y, props: {} }; // one board per bench; wires refer to "uno.<pin>"
   const prefix = kind;
   let n = 1;
   while (existing.some((d) => d.id === `${prefix}${n}`)) n++;
@@ -208,7 +209,7 @@ function stepperWires(): Wire[] {
 }
 
 export function blankProject(): Project {
-  return { version: 1, name: 'Untitled bench', devices: [UNO], wires: [], code: EMPTY_CODE };
+  return { version: 1, name: 'Untitled bench', devices: [], wires: [], code: EMPTY_CODE };
 }
 
 export function cloneProject(p: Project): Project {
@@ -224,7 +225,6 @@ export function parseProject(text: string): Project {
   const devices = raw.devices.filter(
     (d): d is Device => !!d && typeof d.id === 'string' && d.kind in DEVICES && Number.isFinite(d.x) && Number.isFinite(d.y),
   );
-  if (!devices.some((d) => d.kind === 'uno')) devices.unshift({ ...UNO });
   const ids = new Set(devices.map((d) => d.id));
   const wires = raw.wires.filter(
     (x): x is Wire =>

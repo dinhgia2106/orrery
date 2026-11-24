@@ -96,7 +96,7 @@ export default function Wiring({ project, onChange, selection, onSelect, snapsho
       if (e.key === 'Escape') setPending(null);
       if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
         if (selection.type === 'wire') onChange({ ...project, wires: project.wires.filter((w) => w.id !== selection.id) }, true);
-        else if (selection.id !== 'uno')
+        else
           onChange(
             {
               ...project,

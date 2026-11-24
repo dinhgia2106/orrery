@@ -210,8 +210,8 @@ export const DEVICES: Record<DeviceKind, DeviceDef> = {
   },
 };
 
-/** Devices a user can add from the shelf (the Uno is always on the bench). */
-export const SHELF: DeviceKind[] = ['servo', 'a4988', 'stepper', 'button', 'pot', 'led', 'resistor', 'cap', 'psu'];
+/** Devices a user can add from the shelf. One board per bench for now (its id is always "uno"). */
+export const SHELF: DeviceKind[] = ['uno', 'servo', 'a4988', 'stepper', 'button', 'pot', 'led', 'resistor', 'cap', 'psu'];
 
 export function pinDef(kind: DeviceKind, pin: string): PinDef | undefined {
   return DEVICES[kind].pins.find((p) => p.name === pin);

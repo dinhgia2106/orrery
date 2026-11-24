@@ -590,9 +590,10 @@ function mountWorld(asm: Assembly, device: string): V3 | null {
 const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
 
 export default function Scene({ sim, project }: { sim: SimRef; project: Project }) {
-  const uno = project.devices.find((d) => d.kind === 'uno')!;
-  const ucx = uno.x + DEVICES.uno.w / 2;
-  const ucy = uno.y + DEVICES.uno.h / 2;
+  // the bench is laid out around the board's centre (or the canvas origin when there is no board)
+  const uno = project.devices.find((d) => d.kind === 'uno');
+  const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
+  const ucy = uno ? uno.y + DEVICES.uno.h / 2 : DEVICES.uno.h / 2;
   const asm = project.assembly;
   const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
@@ -661,7 +662,7 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
       </directionalLight>
       <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
       <group scale={0.1}>
-        <Uno level={() => sim.current?.builtinLed() ?? 0} />
+        {uno && <Uno level={() => sim.current?.builtinLed() ?? 0} />}
         {asm && <AssemblyView asm={asm} sim={sim} />}
         {nodes}
         {wires}

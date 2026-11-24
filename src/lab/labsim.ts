@@ -63,8 +63,12 @@ interface DriverRt {
   staticDir?: boolean;
 }
 
+/** A blank ATmega328P: 32 KB of 0x0000 (NOP), every pin an input — a board with nothing uploaded yet. */
+export const BLANK_PROGRAM = new Uint16Array(0x4000);
+
 export class LabSimulation {
-  readonly board: ArduinoUno;
+  /** The Arduino on the bench, or null when the bench has no board (circuit only). */
+  readonly board: ArduinoUno | null;
   readonly nets: Netlist;
   /** Problems that make the circuit meaningless (shorted supplies); the circuit is not solved while present. */
   readonly fatal: Check[] = [];
@@ -74,9 +78,12 @@ export class LabSimulation {
   readonly drivers = new Map<string, DriverRt>();
   private readonly leds = new Map<string, LedRt>();
   private readonly closed = new Map<string, boolean>();
+  /** Reference net (0 V): the Uno's GND, else the first bench supply's −; −1 when nothing can be solved. */
   private readonly gnd: number;
   private readonly n5v: number;
   private readonly n3v3: number;
+  private readonly io: PinName[];
+  private clock = 0;
   private readonly unoNet = new Map<PinName, number>();
   private readonly subscribers = new Map<PinName, ((high: boolean, t: number) => void)[]>();
   private sol: Solution | null = null;
@@ -90,15 +97,20 @@ export class LabSimulation {
   private peakRailMa = 0;
   private servoMa = new Map<string, number>();
 
-  constructor(readonly project: Project, program: Uint16Array) {
-    this.board = new ArduinoUno(program);
+  constructor(readonly project: Project, program: Uint16Array = BLANK_PROGRAM) {
+    const hasBoard = project.devices.some((d) => d.kind === 'uno');
+    this.board = hasBoard ? new ArduinoUno(program.length ? program : BLANK_PROGRAM) : null;
     this.nets = new Netlist(project);
     const N = this.nets;
-    this.gnd = N.net('uno.GND1');
-    this.n5v = N.net('uno.5V');
-    this.n3v3 = N.net('uno.3V3');
-    for (const p of IO_PINS) this.unoNet.set(p, N.net(`uno.${p}`));
+    const psu = project.devices.find((d) => d.kind === 'psu');
+    this.gnd = hasBoard ? N.net('uno.GND1') : psu ? N.net(`${psu.id}.-`) : N.count ? 0 : -1;
+    this.n5v = hasBoard ? N.net('uno.5V') : -1;
+    this.n3v3 = hasBoard ? N.net('uno.3V3') : -1;
+    this.io = hasBoard ? IO_PINS : [];
+    for (const p of this.io) this.unoNet.set(p, N.net(`uno.${p}`));
     this.findShorts();
+    if (!hasBoard && !psu && project.devices.length)
+      this.fatal.push({ level: 'warn', msg: 'Nothing powers this bench yet: add an Arduino or a bench supply from the shelf.' });
 
     for (const d of project.devices) {
       if (d.kind === 'servo') {
@@ -123,11 +135,11 @@ export class LabSimulation {
       }
     }
 
-    this.board.onPin((pin, high, t) => {
+    this.board?.onPin((pin, high, t) => {
       this.subscribers.get(pin)?.forEach((f) => f(high, t));
       this.resolve(t);
     });
-    this.board.onSerial((ch) => {
+    this.board?.onSerial((ch) => {
       this.serial = (this.serial + ch).slice(-8000);
     });
     this.resolve(0);
@@ -136,16 +148,18 @@ export class LabSimulation {
   // ───────── public API ─────────
 
   get time(): number {
-    return this.board.time;
+    return this.board ? this.board.time : this.clock;
   }
 
   step(seconds: number): void {
     let left = seconds;
     while (left > 1e-9) {
       const dt = Math.min(0.001, left);
-      if (this.rx.length && !this.board.usart.rxBusy) this.board.usart.writeByte(this.rx.shift()!);
-      this.board.run(dt);
-      const t = this.board.time;
+      if (this.board) {
+        if (this.rx.length && !this.board.usart.rxBusy) this.board.usart.writeByte(this.rx.shift()!);
+        this.board.run(dt);
+      } else this.clock += dt;
+      const t = this.time;
       for (const s of this.servos.values()) s.update(t);
       for (const b of this.buttons.values()) b.update(t);
       const sig = this.modeSignature();
@@ -175,11 +189,11 @@ export class LabSimulation {
   }
 
   builtinLed(): number {
-    return this.board.isHigh('D13') ? 1 : 0;
+    return this.board?.isHigh('D13') ? 1 : 0;
   }
 
   snapshot(): LabSnapshot {
-    const t = this.board.time;
+    const t = this.time;
     const v = (pin: string) => (this.sol ? this.sol.volts[this.nets.net(pin)] : 0);
     const devices: Record<string, PartState> = {};
     for (const d of this.project.devices) {
@@ -215,7 +229,7 @@ export class LabSimulation {
       }
     }
     const pins: LabSnapshot['pins'] = {};
-    for (const p of IO_PINS) {
+    for (const p of this.io) {
       const n = this.unoNet.get(p)!;
       pins[p] = { mode: this.pinMode(p), volts: this.sol && this.sol.driven[n] ? round(this.sol.volts[n], 2) : null };
     }
@@ -237,7 +251,7 @@ export class LabSimulation {
   /** The Uno I/O pin wired to this pin's net, if any. */
   unoPinOn(pin: string): PinName | undefined {
     const n = this.nets.net(pin);
-    return IO_PINS.find((p) => this.unoNet.get(p) === n);
+    return this.io.find((p) => this.unoNet.get(p) === n);
   }
 
   private subscribe(pin: PinName, f: (high: boolean, t: number) => void): void {
@@ -245,11 +259,13 @@ export class LabSimulation {
   }
 
   private findShorts(): void {
-    const supplies: { name: string; net: number; v: number }[] = [
-      { name: 'GND', net: this.gnd, v: 0 },
-      { name: '5V', net: this.n5v, v: 5 },
-      { name: '3V3', net: this.n3v3, v: 3.3 },
-    ];
+    const supplies: { name: string; net: number; v: number }[] = this.board
+      ? [
+          { name: 'GND', net: this.gnd, v: 0 },
+          { name: '5V', net: this.n5v, v: 5 },
+          { name: '3V3', net: this.n3v3, v: 3.3 },
+        ]
+      : [];
     for (let i = 0; i < supplies.length; i++)
       for (let j = i + 1; j < supplies.length; j++)
         if (supplies[i].net === supplies[j].net)
@@ -262,7 +278,7 @@ export class LabSimulation {
         if (s.net === p && s.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} + is wired to the Uno ${s.name} pin: two supplies fight (back-feeding the Uno).`, device: d.id });
         if (s.net === n && s.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} − is wired to the Uno ${s.name} pin.`, device: d.id });
       }
-      if (p === this.gnd && n !== this.gnd) this.fatal.push({ level: 'error', msg: `${d.id} + is wired to GND.`, device: d.id });
+      if (this.board && p === this.gnd && n !== this.gnd) this.fatal.push({ level: 'error', msg: `${d.id} + is wired to GND.`, device: d.id });
     }
   }
 
@@ -273,7 +289,7 @@ export class LabSimulation {
     const stepper = new StepperA4988(id, 'STEP' as PinName, 'DIR' as PinName);
     const rt: DriverRt = { dev: d, stepper, stepPin, dirPin, coilsOk: false, powered: false, awakeSince: -Infinity, enabled: false, reset: true, asleep: false };
     stepper.gate = () =>
-      rt.powered && !rt.reset && !rt.asleep && rt.enabled && rt.coilsOk && this.board.time - rt.awakeSince >= SPEC.a4988.wakeMs / 1000;
+      rt.powered && !rt.reset && !rt.asleep && rt.enabled && rt.coilsOk && this.time - rt.awakeSince >= SPEC.a4988.wakeMs / 1000;
     if (stepPin) this.subscribe(stepPin, (high, t) => stepper.onPin(stepper.stepPin, high, t));
     if (dirPin) this.subscribe(dirPin, (high, t) => stepper.onPin(stepper.dirPin, high, t));
 
@@ -332,30 +348,32 @@ export class LabSimulation {
 
   // ───────── circuit ─────────
 
-  private pinMode(p: PinName): string {
+  private pinState(p: PinName): PinState {
     const { port, bit } = pinLocation(p);
-    return MODE_NAMES[this.board.ports[port].pinState(bit)];
+    return this.board!.ports[port].pinState(bit);
+  }
+
+  private pinMode(p: PinName): string {
+    return MODE_NAMES[this.pinState(p)];
   }
 
   private modeSignature(): string {
     let s = '';
-    for (const p of IO_PINS) {
-      const { port, bit } = pinLocation(p);
-      s += this.board.ports[port].pinState(bit);
-    }
+    for (const p of this.io) s += this.pinState(p);
     return s;
   }
 
   private buildElements(): Element[] {
     const N = this.nets;
-    const E: Element[] = [
-      { kind: 'V', p: this.n5v, n: this.gnd, v: 5, tag: '5V' },
-      { kind: 'V', p: this.n3v3, n: this.gnd, v: 3.3, tag: '3V3' },
-    ];
-    for (const p of IO_PINS) {
+    const E: Element[] = this.board
+      ? [
+          { kind: 'V', p: this.n5v, n: this.gnd, v: 5, tag: '5V' },
+          { kind: 'V', p: this.n3v3, n: this.gnd, v: 3.3, tag: '3V3' },
+        ]
+      : [];
+    for (const p of this.io) {
       const n = this.unoNet.get(p)!;
-      const { port, bit } = pinLocation(p);
-      const st = this.board.ports[port].pinState(bit);
+      const st = this.pinState(p);
       if (st === PinState.High) {
         E.push({ kind: 'G', a: n, b: this.gnd, g: 1 / R_SOURCE, tag: `pin:${p}` });
         E.push({ kind: 'I', from: this.gnd, to: n, i: VCC / R_SOURCE, tag: `pin:${p}` });
@@ -401,7 +419,7 @@ export class LabSimulation {
   private resolve(t: number): void {
     this.dirty = false;
     this.integrateLeds(t);
-    if (this.fatal.length) {
+    if (this.fatal.length || this.gnd < 0) {
       this.sol = null;
       return;
     }
@@ -425,20 +443,21 @@ export class LabSimulation {
 
   private applyInputs(t: number): void {
     const sol = this.sol!;
-    for (const p of IO_PINS) {
-      const { port, bit } = pinLocation(p);
-      const st = this.board.ports[port].pinState(bit);
+    const board = this.board;
+    if (!board) return;
+    for (const p of this.io) {
+      const st = this.pinState(p);
       if (st !== PinState.Input && st !== PinState.InputPullUp) continue;
       const n = this.unoNet.get(p)!;
       const v = sol.volts[n];
-      if (p[0] === 'A') this.board.setAnalogInput(p as (typeof ANALOG_PINS)[number], sol.driven[n] ? v : 0);
+      if (p[0] === 'A') board.setAnalogInput(p as (typeof ANALOG_PINS)[number], sol.driven[n] ? v : 0);
       if (!sol.driven[n]) continue; // floating: the pin keeps its last level (reported in checks)
       let level = this.lastInput.get(p) ?? false;
       if (v >= M.vihFrac * VCC) level = true;
       else if (v <= M.vilFrac * VCC) level = false;
       if (this.lastInput.get(p) !== level || t === 0) {
         this.lastInput.set(p, level);
-        this.board.setDigitalInput(p, level);
+        board.setDigitalInput(p, level);
       }
     }
   }
@@ -452,10 +471,9 @@ export class LabSimulation {
     const add = (key: string, level: Check['level'], msg: string, device?: string) => checks.set(key, { level, msg, device });
 
     // Uno pins: floating inputs, over-current, pins tied together
-    for (const p of IO_PINS) {
+    for (const p of this.io) {
       const n = this.unoNet.get(p)!;
-      const { port, bit } = pinLocation(p);
-      const st = this.board.ports[port].pinState(bit);
+      const st = this.pinState(p);
       const wired = N.connected(`uno.${p}`);
       if (wired && (st === PinState.Input || st === PinState.InputPullUp) && !sol.driven[n])
         add(`float:${p}`, 'warn', `${p} is an input but nothing drives it while it is open — it floats and reads at random. Use INPUT_PULLUP or a pull-down resistor.`);
@@ -468,7 +486,7 @@ export class LabSimulation {
         if (Math.abs(ma) > M.pinAbsMaxMa)
           add(`oc:${p}`, 'error', `${p} ${st === PinState.High ? 'sources' : 'sinks'} ~${Math.abs(ma).toFixed(0)} mA — above the ATmega328P's ${M.pinAbsMaxMa} mA absolute maximum per pin. Add a resistor or check for a short.`);
       }
-      const others = IO_PINS.filter((q) => q !== p && this.unoNet.get(q) === n);
+      const others = this.io.filter((q) => q !== p && this.unoNet.get(q) === n);
       if (others.length && p < others[0]) add(`tied:${p}`, 'warn', `${[p, ...others].join(' and ')} are wired together: if both are outputs at different levels they fight.`);
     }
 
@@ -476,7 +494,7 @@ export class LabSimulation {
     for (const d of this.project.devices.filter((x) => x.kind === 'servo')) {
       const vplus = V(`${d.id}.V+`) - V(`${d.id}.GND`);
       if (!this.unoPinOn(`${d.id}.SIG`)) add(`${d.id}.sig`, 'warn', `${d.id}: SIG (orange) is not wired to an Arduino pin.`, d.id);
-      if (N.net(`${d.id}.GND`) !== this.gnd) add(`${d.id}.gnd`, 'warn', `${d.id}: its GND is not common with the Uno's GND, so the signal has no reference — it will not respond.`, d.id);
+      if (this.board && N.net(`${d.id}.GND`) !== this.gnd) add(`${d.id}.gnd`, 'warn', `${d.id}: its GND is not common with the Uno's GND, so the signal has no reference — it will not respond.`, d.id);
       else if (vplus < SERVO_MIN_V - 0.05 || vplus > SERVO_MAX_V + 0.05)
         add(`${d.id}.v`, 'warn', `${d.id}: V+ is ${vplus.toFixed(2)} V; the SG90 is specified for ${SERVO_MIN_V}–${SERVO_MAX_V} V.`, d.id);
     }
@@ -533,7 +551,7 @@ export class LabSimulation {
       const id = l.dev.id;
       const vd = V(`${id}.A`) - V(`${id}.K`);
       l.amps = l.on ? Math.max(0, (vd - SPEC.wp7113id.vfTyp) / LED_RS) : 0;
-      if (l.amps * 1000 > SPEC.wp7113id.ifMaxMa) add(`${id}.oc`, 'error', `${id}: ~${(l.amps * 1000).toFixed(0)} mA through the LED, above its ${SPEC.wp7113id.ifMaxMa} mA maximum — add a series resistor (≥ ${Math.ceil(((5 - SPEC.wp7113id.vfTyp) / SPEC.wp7113id.ifMaxMa) * 1000)} Ω from 5 V).`, id);
+      if (l.amps * 1000 > SPEC.wp7113id.ifMaxMa) add(`${id}.oc`, 'error', `${id}: ~${(l.amps * 1000).toFixed(0)} mA through the LED, above its ${SPEC.wp7113id.ifMaxMa} mA maximum — add or raise the series resistor: R ≥ (supply − ${SPEC.wp7113id.vfTyp} V) / ${SPEC.wp7113id.ifMaxMa} mA.`, id);
       if (vd < -2) add(`${id}.rev`, 'warn', `${id}: reverse-biased — it will not light. The anode (A+, long leg) goes to the positive side.`, id);
     }
     for (const d of this.project.devices.filter((x) => x.kind === 'button')) {
@@ -546,7 +564,7 @@ export class LabSimulation {
     for (const d of this.project.devices.filter((x) => x.kind === 'cap')) {
       if (V(`${d.id}.+`) - V(`${d.id}.-`) < -0.5) add(`${d.id}.rev`, 'error', `${d.id}: reverse voltage across an electrolytic capacitor — swap its leads.`, d.id);
     }
-    if (N.connected('uno.VIN')) {
+    if (this.board && N.connected('uno.VIN')) {
       const vin = V('uno.VIN');
       if (sol.driven[N.net('uno.VIN')] && (vin < SPEC.uno.vinMinV || vin > SPEC.uno.vinMaxV))
         add('vin', 'warn', `VIN is ${vin.toFixed(1)} V; the UNO R3 datasheet recommends ${SPEC.uno.vinMinV}–${SPEC.uno.vinMaxV} V.`);
@@ -555,7 +573,7 @@ export class LabSimulation {
   }
 
   private servoPowered(d: Device): boolean {
-    if (!this.sol || this.nets.net(`${d.id}.GND`) !== this.gnd) return false;
+    if (!this.sol || !this.board || this.nets.net(`${d.id}.GND`) !== this.gnd) return false;
     const v = this.sol.volts[this.nets.net(`${d.id}.V+`)] - this.sol.volts[this.nets.net(`${d.id}.GND`)];
     return v >= SERVO_MIN_V - 0.05 && v <= SERVO_MAX_V + 0.05;
   }
@@ -579,14 +597,13 @@ export class LabSimulation {
 
   /** 5 V rail: solved draw from the 5V and 3V3 pins and high outputs, plus device and board figures. */
   private trackRail(): void {
-    if (!this.sol) return;
+    if (!this.sol || !this.board) return;
     let a = 0;
     this.elements.forEach((e, i) => {
       if (e.kind === 'V' && (e.tag === '5V' || e.tag === '3V3')) a += Math.max(0, this.sol!.sourceAmps.get(i) ?? 0);
     });
-    for (const p of IO_PINS) {
-      const { port, bit } = pinLocation(p);
-      if (this.board.ports[port].pinState(bit) === PinState.High) a += Math.max(0, (VCC - this.sol.volts[this.unoNet.get(p)!]) / R_SOURCE);
+    for (const p of this.io) {
+      if (this.pinState(p) === PinState.High) a += Math.max(0, (VCC - this.sol.volts[this.unoNet.get(p)!]) / R_SOURCE);
     }
     let ma = a * 1000 + SPEC.uno.boardMaApprox + (this.board.isHigh('D13') ? (VCC / SPEC.uno.builtinLedSeriesOhms) * 1000 : 0);
     for (const [id, s] of this.servos) {

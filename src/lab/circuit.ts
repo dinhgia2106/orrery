@@ -81,7 +81,7 @@ export interface Solution {
   volts: Float64Array;
   /** Current delivered out of each voltage source's + terminal, by element index. */
   sourceAmps: Map<number, number>;
-  /** Nets with a conductive path to the ground net (the others are floating). */
+  /** Nets with a conductive path to the ground net or to a supply (the others are floating). */
   driven: Uint8Array;
 }
 
@@ -143,9 +143,17 @@ export function solve(nets: number, ground: number, elements: Element[]): Soluti
     adj[a].push(b);
     adj[b].push(a);
   }
+  // driven = connected to the reference or to any supply (an isolated bench-supply circuit is still powered)
   const driven = new Uint8Array(nets);
   const stack = [ground];
   driven[ground] = 1;
+  for (const e of elements)
+    if (e.kind === 'V')
+      for (const n of [e.p, e.n])
+        if (!driven[n]) {
+          driven[n] = 1;
+          stack.push(n);
+        }
   while (stack.length) {
     const v = stack.pop()!;
     for (const u of adj[v]) if (!driven[u]) {

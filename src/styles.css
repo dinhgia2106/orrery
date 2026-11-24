@@ -380,3 +380,4 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .asm-errors { margin: 0; padding: 8px 10px 8px 24px; color: var(--danger); background: rgba(194, 65, 45, 0.05); border: 1px solid rgba(194, 65, 45, 0.3); border-radius: 3px; display: grid; gap: 3px; }
 .asm-errors li.note { color: var(--ink); }
 .app > * { min-height: 0; }
+.shelf button:disabled { opacity: 0.45; cursor: default; border-color: var(--line); }
