@@ -13,7 +13,7 @@ type SimRef = MutableRefObject<Simulation | null>;
 type V3 = [number, number, number];
 
 const DEG = Math.PI / 180;
-const PRINTED = '#d9dde3'; // custom 3D-printed parts (not in the BOM)
+const PRINTED = '#c9d3e2'; // custom 3D-printed parts (not in the BOM)
 
 // ───────────────────────── Arduino UNO R3 ─────────────────────────
 
@@ -334,7 +334,7 @@ function Breadboard() {
   return (
     <group position={BREADBOARD.pos}>
       <RoundedBox args={[L, H, W]} radius={1} position={[0, H / 2, 0]} receiveShadow castShadow>
-        <meshStandardMaterial color="#f3f1ea" roughness={0.8} />
+        <meshStandardMaterial color="#e6e4dc" roughness={0.8} />
       </RoundedBox>
       <mesh position={[0, H + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[L - 4, 2.5]} />
@@ -408,7 +408,7 @@ function Arm({ sim, servoId, stepperId }: { sim: SimRef; servoId: string; steppe
               </RoundedBox>
               <mesh position={[105, 0, SPEC.nema17.shaftLenMmApprox - 2]} castShadow>
                 <sphereGeometry args={[8, 32, 32]} />
-                <meshStandardMaterial color="#5ad1ff" emissive="#1e8fbf" emissiveIntensity={0.4} />
+                <meshStandardMaterial color="#2f63c0" metalness={0.2} roughness={0.35} />
               </mesh>
             </Nema17>
           </group>
@@ -498,13 +498,13 @@ export default function Scene({ sim, specs }: { sim: SimRef; specs: PartSpec[] }
   }
 
   return (
-    <Canvas shadows camera={{ position: [2, 24, 38], fov: 40 }} dpr={[1, 2]}>
-      <color attach="background" args={['#0b0f14']} />
-      <ambientLight intensity={0.5} />
+    <Canvas shadows camera={{ position: [3, 27, 46], fov: 40 }} dpr={[1, 2]} gl={{ alpha: true }}>
+      <ambientLight intensity={0.75} />
+      <hemisphereLight args={["#ffffff", "#d8dde6", 0.6]} />
       <directionalLight position={[8, 16, 10]} intensity={1.7} castShadow shadow-mapSize={[2048, 2048]}>
         <orthographicCamera attach="shadow-camera" args={[-25, 25, 25, -25, 0.1, 60]} />
       </directionalLight>
-      <pointLight position={[-10, 6, -6]} intensity={40} color="#5ad1ff" />
+      <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
       <group scale={0.1}>
         <Uno sim={sim} builtinLedId={builtin?.id} />
         {needsBreadboard && <Breadboard />}
@@ -513,10 +513,10 @@ export default function Scene({ sim, specs }: { sim: SimRef; specs: PartSpec[] }
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[80, 80]} />
-        <shadowMaterial opacity={0.35} />
+        <shadowMaterial opacity={0.16} />
       </mesh>
-      <Grid args={[40, 40]} cellSize={1} cellColor="#1b2633" sectionSize={5} sectionColor="#24384d" fadeDistance={40} infiniteGrid />
-      <OrbitControls makeDefault target={[-1, 5, 2]} maxPolarAngle={Math.PI / 2.05} />
+      <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={60} fadeStrength={1.5} infiniteGrid />
+      <OrbitControls makeDefault target={[0, 7, 2]} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>
   );
 }
