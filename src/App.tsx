@@ -10,12 +10,13 @@ import {
   cloneProject,
   newDevice,
   parseProject,
+  sketchOf,
+  withSketch,
   projectFromHash,
   projectToHash,
   type Project,
   type Template,
 } from './lab/project';
-import { BLANK_PROGRAM } from './lab/labsim';
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
 import { aiPrompt, assemblyFromStl, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
@@ -50,11 +51,21 @@ function electricalKey(p: Project): string {
   return JSON.stringify([p.devices.map((d) => [d.id, d.kind, d.props]), p.wires.map((w) => [w.a, w.b])]);
 }
 
-async function fetchTemplateHex(t: Template): Promise<Uint16Array> {
-  const res = await fetch(`${import.meta.env.BASE_URL}examples/${t.hex}.hex`);
+async function fetchHex(name: string): Promise<Uint16Array> {
+  const res = await fetch(`${import.meta.env.BASE_URL}examples/${name}.hex`);
   const text = res.ok ? await res.text() : '';
-  if (!text.trimStart().startsWith(':')) throw new Error(`examples/${t.hex}.hex is missing — run "npm run build:examples".`);
+  if (!text.trimStart().startsWith(':')) throw new Error(`examples/${name}.hex is missing — run "npm run build:examples".`);
   return parseIntelHex(text);
+}
+
+/** Prebuilt firmware for every board of a template. */
+async function templateFirmware(t: Template): Promise<Record<string, Firmware>> {
+  const entries = Object.entries({ uno: t.hex, ...t.hexes });
+  const out: Record<string, Firmware> = {};
+  for (const [board, name] of entries) {
+    out[board] = { program: await fetchHex(name), code: sketchOf(t.project, board), label: `${t.title} (prebuilt)` };
+  }
+  return out;
 }
 
 function Section({ n, title }: { n: string; title: string }) {
@@ -70,7 +81,9 @@ export default function App() {
   const lab = useLab();
   const { sim, snapshot, running, setRunning, speed, setSpeed, realtime, boot } = lab;
   const [project, setProject] = useState<Project>(initialProject);
-  const [firmware, setFirmware] = useState<Firmware | null>(null);
+  /** Firmware per board id. */
+  const [firmwares, setFirmwares] = useState<Record<string, Firmware>>({});
+  const [activeBoard, setActiveBoard] = useState('uno');
   const [tab, setTab] = useState<Tab>('wiring');
   const [selection, setSelection] = useState<Selection>(null);
   const [helper, setHelper] = useState<string | null | undefined>(undefined);
@@ -86,7 +99,10 @@ export default function App() {
   const pressStart = useRef(0);
 
   const refs = useMemo(() => designators(project), [project]);
-  const hasBoard = project.devices.some((d) => d.kind === 'uno');
+  const boardIds = project.devices.filter((d) => d.kind === 'uno').map((d) => d.id);
+  const hasBoard = boardIds.length > 0;
+  const active = boardIds.includes(activeBoard) ? activeBoard : boardIds[0] ?? 'uno';
+  const programs = (fw: Record<string, Firmware>) => Object.fromEntries(Object.entries(fw).map(([k, f]) => [k, f.program]));
 
   // autosave
   useEffect(() => {
@@ -104,12 +120,12 @@ export default function App() {
   // first run: if the project is an unchanged template, load its prebuilt firmware
   useEffect(() => {
     const t = TEMPLATES.find((x) => x.project.code === project.code);
-    boot(project, BLANK_PROGRAM);
+    boot(project, {});
     if (t && project.devices.some((d) => d.kind === 'uno'))
-      void fetchTemplateHex(t)
-        .then((program) => {
-          setFirmware({ program, code: t.project.code, label: `${t.title} (prebuilt)` });
-          boot(project, program);
+      void templateFirmware(t)
+        .then((fw) => {
+          setFirmwares(fw);
+          boot(project, programs(fw));
         })
         .catch((e) => setNotice((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,10 +135,10 @@ export default function App() {
     (next: Project, isElectrical: boolean) => {
       setProject(next);
       const key = electricalKey(next);
-      if (isElectrical && key !== electrical.current) boot(next, firmware?.program ?? BLANK_PROGRAM); // rewiring = power-cycling the bench
+      if (isElectrical && key !== electrical.current) boot(next, programs(firmwares)); // rewiring = power-cycling the bench
       electrical.current = key;
     },
-    [firmware, boot],
+    [firmwares, boot],
   );
 
   const loadTemplate = async (t: Template) => {
@@ -132,9 +148,10 @@ export default function App() {
     setSelection(null);
     setResult(null);
     try {
-      const program = await fetchTemplateHex(t);
-      setFirmware({ program, code: t.project.code, label: `${t.title} (prebuilt)` });
-      boot(p, program);
+      const fw = await templateFirmware(t);
+      setFirmwares(fw);
+      setActiveBoard('uno');
+      boot(p, programs(fw));
       setNotice(null);
     } catch (e) {
       setNotice((e as Error).message);
@@ -143,13 +160,15 @@ export default function App() {
 
   const compileAndRun = async () => {
     setCompiling(true);
-    const r = await compileSketch(project.code);
+    const code = sketchOf(project, active);
+    const r = await compileSketch(code);
     setCompiling(false);
     setResult(r);
     setHelper(r.ok || r.diagnostics.length ? 'connected' : await compilerHealth());
     if (r.ok && r.program) {
-      setFirmware({ program: r.program, code: project.code, label: 'sketch.ino' });
-      boot(project, r.program);
+      const fw = { ...firmwares, [active]: { program: r.program, code, label: `${active}: sketch` } };
+      setFirmwares(fw);
+      boot(project, programs(fw));
     } else setTab('code');
   };
 
@@ -180,14 +199,15 @@ export default function App() {
       const text = await file.text();
       if (file.name.endsWith('.hex')) {
         const program = parseIntelHex(text);
-        setFirmware({ program, code: null, label: file.name });
-        boot(project, program);
+        const fw = { ...firmwares, [active]: { program, code: null, label: `${active}: ${file.name}` } };
+        setFirmwares(fw);
+        boot(project, programs(fw));
       } else {
         const p = parseProject(text);
         setProject(p);
         electrical.current = electricalKey(p);
         setSelection(null);
-        boot(p, firmware?.program ?? BLANK_PROGRAM);
+        boot(p, programs(firmwares));
       }
       setNotice(null);
     } catch (e) {
@@ -225,6 +245,10 @@ export default function App() {
   };
 
   const removeDevice = (id: string) => {
+    if (firmwares[id]) {
+      const { [id]: _gone, ...rest } = firmwares;
+      setFirmwares(rest);
+    }
     update(
       {
         ...project,
@@ -316,19 +340,24 @@ export default function App() {
     }
   };
 
-  const restart = () => boot(project, firmware?.program ?? BLANK_PROGRAM);
-  const fwLabel = hasBoard ? firmware?.label ?? 'blank chip' : 'no board';
+  const restart = () => boot(project, programs(firmwares));
+  const fwLabel = !hasBoard
+    ? 'no board'
+    : boardIds.length === 1
+      ? firmwares[boardIds[0]]?.label ?? 'blank chip'
+      : `${boardIds.length} boards · ${boardIds.filter((b) => firmwares[b]).length} programmed`;
 
   const newBench = () => {
     const p = blankProject();
-    setFirmware(null);
+    setFirmwares({});
     setResult(null);
     setSelection(null);
     setProject(p);
     electrical.current = electricalKey(p);
-    boot(p, BLANK_PROGRAM);
+    boot(p, {});
   };
-  const stale = !!firmware && firmware.code !== null && firmware.code !== project.code;
+  const activeFw = firmwares[active];
+  const stale = !!activeFw && activeFw.code !== null && activeFw.code !== sketchOf(project, active);
   const selDevice = selection?.type === 'device' ? project.devices.find((d) => d.id === selection.id) : undefined;
   const selWire = selection?.type === 'wire' ? project.wires.find((w) => w.id === selection.id) : undefined;
   const railMa = snapshot?.railMa ?? 0;
@@ -393,7 +422,7 @@ export default function App() {
             const item = CATALOG[DEVICES[k].catalog];
             return (
               <li key={k}>
-                <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`} disabled={k === 'uno' && hasBoard}>
+                <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`}>
                   <span className="ref mono">{DEVICES[k].refPrefix}</span>
                   <span className="shelf-name">
                     <strong>{DEVICES[k].title}</strong>
@@ -408,7 +437,7 @@ export default function App() {
 
         <Section n="02" title="Run" />
         <button className="primary wide" onClick={() => void compileAndRun()} disabled={compiling || !hasBoard} title={hasBoard ? undefined : 'Add an Arduino from the shelf to run a sketch'}>
-          {compiling ? 'Compiling…' : hasBoard ? 'Compile & run sketch' : 'Add a board to run a sketch'}
+          {compiling ? 'Compiling…' : hasBoard ? `Compile & run ${boardIds.length > 1 ? active : 'sketch'}` : 'Add a board to run a sketch'}
         </button>
         <p className={`helper mono ${helper ? 'ok' : 'off'}`}>
           {helper === undefined ? 'checking compile helper…' : helper ? '● compile helper connected' : '○ no compile helper — run "npm run compiler"'}
@@ -511,7 +540,8 @@ export default function App() {
           )}
           {tab === 'code' && (
             <div className="code-pane">
-              <CodeEditor code={project.code} onChange={(code) => setProject({ ...project, code })} onCompile={() => void compileAndRun()} diagnostics={result?.diagnostics ?? []} />
+              {boardIds.length > 1 && <BoardTabs ids={boardIds} active={active} onPick={setActiveBoard} refs={refs} programmed={firmwares} />}
+              <CodeEditor code={sketchOf(project, active)} onChange={(code) => setProject(withSketch(project, active, code))} onCompile={() => void compileAndRun()} diagnostics={result?.diagnostics ?? []} />
               {result && <pre className={`compile-log mono ${result.ok ? 'ok' : 'err'}`}>{result.log || (result.ok ? 'Compiled.' : 'Failed.')}</pre>}
             </div>
           )}
@@ -690,12 +720,13 @@ export default function App() {
         )}
 
         <Section n="10" title="Serial monitor" />
-        <pre className="serial">{snapshot?.serial || '—'}</pre>
+        {boardIds.length > 1 && <BoardTabs ids={boardIds} active={active} onPick={setActiveBoard} refs={refs} programmed={firmwares} />}
+        <pre className="serial">{snapshot?.serial[active] || '—'}</pre>
         <form
           className="serial-in"
           onSubmit={(e) => {
             e.preventDefault();
-            sim.current?.sendSerial(`${serialIn}\n`);
+            sim.current?.sendSerial(`${serialIn}\n`, active);
             setSerialIn('');
           }}
         >
@@ -811,6 +842,19 @@ function overlaps(d: { kind: DeviceKind; x: number; y: number }, x: number, y: n
   const m = 30;
   const def = DEVICES[d.kind];
   return x < d.x + def.w + m && x + w + m > d.x && y < d.y + def.h + m && y + h + m > d.y;
+}
+
+function BoardTabs({ ids, active, onPick, refs, programmed }: { ids: string[]; active: string; onPick: (id: string) => void; refs: Record<string, string>; programmed: Record<string, unknown> }) {
+  return (
+    <div className="board-tabs mono">
+      {ids.map((id) => (
+        <button key={id} className={id === active ? 'on' : ''} onClick={() => onPick(id)}>
+          {refs[id]} · {id}
+          {!programmed[id] && <span className="muted"> (blank)</span>}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function StateList({ state }: { state?: Record<string, number | boolean | string> }) {

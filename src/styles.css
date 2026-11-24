@@ -381,3 +381,9 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .asm-errors li.note { color: var(--ink); }
 .app > * { min-height: 0; }
 .shelf button:disabled { opacity: 0.45; cursor: default; border-color: var(--line); }
+.board-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.board-tabs button { padding: 3px 8px; font-size: 11px; border: 1px solid var(--line-strong); background: var(--paper); border-radius: 3px; cursor: pointer; color: var(--muted); }
+.board-tabs button.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.code-pane .board-tabs { margin: 0; }
+.code-pane { display: flex; flex-direction: column; }
+.code-pane .editor { flex: 1; }

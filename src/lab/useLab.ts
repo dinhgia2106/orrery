@@ -12,8 +12,9 @@ export function useLab() {
   const [speed, setSpeed] = useState(1);
   const [realtime, setRealtime] = useState(1);
 
-  const boot = useCallback((project: Project, program: Uint16Array) => {
-    const sim = new LabSimulation(project, program);
+  /** Start the bench from scratch with firmware per board id (boards without one run a blank chip). */
+  const boot = useCallback((project: Project, programs: Record<string, Uint16Array>) => {
+    const sim = new LabSimulation(project, programs);
     simRef.current = sim;
     setSnapshot(sim.snapshot());
     setRunning(sim.fatal.length === 0);

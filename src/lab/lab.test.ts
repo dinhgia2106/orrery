@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import blinkHex from '../../public/examples/blink.hex?raw';
 import robotArmHex from '../../public/examples/robot-arm.hex?raw';
+import serialEchoHex from '../../public/examples/serial-echo.hex?raw';
+import serialPingHex from '../../public/examples/serial-ping.hex?raw';
 import servoSweepHex from '../../public/examples/servo-sweep.hex?raw';
 import stepperHex from '../../public/examples/stepper-a4988.hex?raw';
 import { parseIntelHex } from '../sim/hex';
 import { solve } from './circuit';
 import { LabSimulation } from './labsim';
-import { TEMPLATES, blankProject, cloneProject, parseProject, projectFromHash, projectToHash, type Project } from './project';
+import { TEMPLATES, blankProject, cloneProject, newDevice, parseProject, projectFromHash, projectToHash, sketchOf, type Project } from './project';
 
 const HEX: Record<string, string> = { blink: blinkHex, 'robot-arm': robotArmHex, 'servo-sweep': servoSweepHex, 'stepper-a4988': stepperHex };
 const template = (id: string) => cloneProject(TEMPLATES.find((t) => t.id === id)!.project);
@@ -77,7 +79,7 @@ describe('templates run their real firmware against the wired circuit', () => {
     b.press(false, 0.05);
     sim.step(0.4);
     expect(sim.motorAngle('stepper1')).toBeCloseTo(0, 5);
-    expect(sim.snapshot().serial).toContain('elbow -> 0');
+    expect(sim.snapshot().serial.uno).toContain('elbow -> 0');
   });
 });
 
@@ -129,7 +131,7 @@ describe('wiring mistakes behave like the bench', () => {
     const sim = run(p, 'servo-sweep');
     sim.step(1);
     expect(sim.servos.get('servo1')!.angle).toBe(90);
-    expect(msgs(sim)).toMatch(/not common with the Uno's GND/);
+    expect(msgs(sim)).toMatch(/GND is not common with uno's GND/);
   });
 
   it('an LED straight from a pin to GND is flagged as over-current; with 220 Ω it is fine', () => {
@@ -264,5 +266,56 @@ describe('benches without a board, or with a blank one', () => {
   it('projects without a board survive save and load', () => {
     expect(blankProject().devices).toEqual([]);
     expect(parseProject(JSON.stringify(ledBench(9))).devices.map((d) => d.kind)).toEqual(['psu', 'resistor', 'led']);
+  });
+});
+
+describe('several boards on one bench', () => {
+  const pingHex = parseIntelHex(serialPingHex);
+  const echoHex = parseIntelHex(serialEchoHex);
+
+  it('two boards talk over a TX→RX wire, each running its own firmware', () => {
+    const p = template('two-boards');
+    const sim = new LabSimulation(p, { uno: pingHex, uno2: echoHex });
+    expect(sim.boards.map((b) => b.id)).toEqual(['uno', 'uno2']);
+    sim.step(1.2);
+    const s = sim.snapshot();
+    expect(s.serial.uno).toContain('ping 1');
+    expect(s.serial.uno2).toContain('got: ping 0');
+    expect(s.serial.uno2).toContain('got: ping 1');
+    expect(s.checks).toEqual([]);
+  });
+
+  it('without a shared ground the link is flagged', () => {
+    const p = template('two-boards');
+    p.wires = p.wires.filter((w) => !w.a.includes('GND'));
+    const sim = new LabSimulation(p, { uno: pingHex, uno2: echoHex });
+    sim.step(0.01);
+    expect(msgs(sim)).toMatch(/share no ground/);
+  });
+
+  it('any number of boards: three boards, each blinking its own L LED', () => {
+    const blink = parseIntelHex(blinkHex);
+    const p: Project = {
+      version: 1,
+      name: 'three',
+      devices: ['uno', 'uno2', 'uno3'].map((id, i) => ({ id, kind: 'uno', x: 0, y: i * 400, props: {} })),
+      wires: [],
+      code: '',
+    };
+    const sim = new LabSimulation(p, { uno: blink, uno3: blink });
+    sim.step(0.25);
+    expect([sim.builtinLed('uno'), sim.builtinLed('uno2'), sim.builtinLed('uno3')]).toEqual([1, 0, 1]);
+  });
+
+  it("one board's 5V wired to another's 3V3 is a short", () => {
+    const p = template('two-boards');
+    p.wires.push({ id: 'x', a: 'uno.5V', b: 'uno2.3V3', color: '#f00' });
+    expect(new LabSimulation(p).fatal.map((c) => c.msg).join()).toMatch(/Short circuit: uno 5V and uno2 3V3/);
+  });
+
+  it('new boards get their own ids and sketches survive a round trip', () => {
+    const p = template('two-boards');
+    expect(newDevice('uno', p.devices, 0, 0).id).toBe('uno3');
+    expect(sketchOf(parseProject(JSON.stringify(p)), 'uno2')).toContain('got: ');
   });
 });

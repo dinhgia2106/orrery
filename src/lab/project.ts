@@ -5,6 +5,8 @@ import robotArmIno from '../../examples/robot-arm/robot-arm.ino?raw';
 import servoSweepIno from '../../examples/servo-sweep/servo-sweep.ino?raw';
 import stepperIno from '../../examples/stepper-a4988/stepper-a4988.ino?raw';
 import robotHandIno from '../../examples/robot-hand/robot-hand.ino?raw';
+import serialEchoIno from '../../examples/serial-echo/serial-echo.ino?raw';
+import serialPingIno from '../../examples/serial-ping/serial-ping.ino?raw';
 import armAssembly from '../../examples/robot-arm/robot-arm.assembly.json';
 import handAssembly from '../../examples/robot-hand/robot-hand.assembly.json';
 import { validateAssembly, type Assembly } from '../mech/assembly';
@@ -31,7 +33,10 @@ export interface Project {
   name: string;
   devices: Device[];
   wires: Wire[];
+  /** Sketch of the board "uno" (the first board). */
   code: string;
+  /** Sketches of further boards, by board id ("uno2", "uno3", …). */
+  sketches?: Record<string, string>;
   /** The 3D mechanism (Orrery Assembly Format), if the bench has one. */
   assembly?: Assembly;
 }
@@ -50,7 +55,13 @@ export function defaultWireColor(a: string, b: string, index: number): string {
 const UNO: Device = { id: 'uno', kind: 'uno', x: 0, y: 0, props: {} };
 
 export function newDevice(kind: DeviceKind, existing: Device[], x: number, y: number): Device {
-  if (kind === 'uno') return { id: 'uno', kind, x, y, props: {} }; // one board per bench; wires refer to "uno.<pin>"
+  if (kind === 'uno') {
+    // the first board is "uno" (its sketch is project.code); further boards are uno2, uno3, …
+    if (!existing.some((d) => d.id === 'uno')) return { id: 'uno', kind, x, y, props: {} };
+    let k = 2;
+    while (existing.some((d) => d.id === `uno${k}`)) k++;
+    return { id: `uno${k}`, kind, x, y, props: {} };
+  }
   const prefix = kind;
   let n = 1;
   while (existing.some((d) => d.id === `${prefix}${n}`)) n++;
@@ -80,6 +91,8 @@ export interface Template {
   summary: string;
   /** Prebuilt firmware for the unchanged code in public/examples/, so templates run without a compiler. */
   hex: string;
+  /** Prebuilt firmware for further boards, by board id. */
+  hexes?: Record<string, string>;
   project: Project;
 }
 
@@ -188,6 +201,21 @@ export const TEMPLATES: Template[] = [
       assembly: handAssembly as Assembly,
     },
   },
+  {
+    id: 'two-boards',
+    title: 'Two boards over serial',
+    summary: 'U1 sends "ping n" from its TX (D1) to the RX (D0) of U2, which toggles its L LED and prints what it got. Shared ground.',
+    hex: 'serial-ping',
+    hexes: { uno2: 'serial-echo' },
+    project: {
+      version: 1,
+      name: 'Two boards over serial',
+      devices: [UNO, { id: 'uno2', kind: 'uno', x: 0, y: 380, props: {} }],
+      wires: [w('uno.D1', 'uno2.D0', '#3d7bff'), w('uno2.D1', 'uno.D0', '#33c46b'), w('uno.GND1', 'uno2.GND1', '#1f1f1f')],
+      code: serialPingIno,
+      sketches: { uno2: serialEchoIno },
+    },
+  },
 ];
 
 function stepperWires(): Wire[] {
@@ -206,6 +234,14 @@ function stepperWires(): Wire[] {
     w('a49881.2A', 'stepper1.B+', '#e53935'),
     w('a49881.2B', 'stepper1.B-', '#3d7bff'),
   ];
+}
+
+export function sketchOf(p: Project, boardId: string): string {
+  return boardId === 'uno' ? p.code : p.sketches?.[boardId] ?? EMPTY_CODE;
+}
+
+export function withSketch(p: Project, boardId: string, code: string): Project {
+  return boardId === 'uno' ? { ...p, code } : { ...p, sketches: { ...p.sketches, [boardId]: code } };
 }
 
 export function blankProject(): Project {
@@ -236,6 +272,10 @@ export function parseProject(text: string): Project {
     devices: devices.map((d) => ({ id: d.id, kind: d.kind, x: d.x, y: d.y, props: { ...(d.props ?? {}) } })),
     wires: wires.map((x) => ({ id: typeof x.id === 'string' ? x.id : newWireId(), a: x.a, b: x.b, color: typeof x.color === 'string' ? x.color : '#3d7bff' })),
     code: raw.code.slice(0, 200_000),
+    sketches:
+      raw.sketches && typeof raw.sketches === 'object'
+        ? Object.fromEntries(Object.entries(raw.sketches).filter(([k, v]) => ids.has(k) && typeof v === 'string').map(([k, v]) => [k, (v as string).slice(0, 200_000)]))
+        : undefined,
     assembly: raw.assembly === undefined ? undefined : validateAssembly(raw.assembly).assembly,
   };
 }

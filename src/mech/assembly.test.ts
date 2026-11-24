@@ -83,6 +83,6 @@ describe('robot hand template', () => {
     const snap = sim.snapshot();
     expect(snap.checks).toEqual([]);
     expect(snap.railMa).toBeLessThan(100); // servo current goes to the bench supply, not the USB fuse
-    expect(snap.serial).toContain('hand ready');
+    expect(snap.serial.uno).toContain('hand ready');
   });
 });

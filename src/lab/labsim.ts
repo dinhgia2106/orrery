@@ -1,5 +1,5 @@
-// Runs a lab project: real firmware on the Uno, the bench circuit solved from the user's wiring, and the
-// device models driven from it. Wiring mistakes surface as checks, the way they would on a real bench.
+// Runs a lab project: real firmware on every Arduino on the bench, the circuit solved from the user's wiring,
+// and the device models driven from it. Wiring mistakes surface as checks, the way they would on a real bench.
 import { ANALOG_PINS, ArduinoUno, DIGITAL_PINS, pinLocation, type PinName } from '../sim/board';
 import { SPEC } from '../sim/catalog';
 import { Button, Potentiometer, Servo, StepperA4988, type PartState } from '../sim/parts';
@@ -16,10 +16,15 @@ export interface Check {
 export interface LabSnapshot {
   time: number;
   devices: Record<string, PartState>;
+  /** Keyed "boardId.pin". */
   pins: Record<string, { mode: string; volts: number | null }>;
+  /** Peak 5 V rail current of the busiest board. */
   railMa: number;
+  /** Per board. */
+  rails: Record<string, number>;
   checks: Check[];
-  serial: string;
+  /** Serial output per board. */
+  serial: Record<string, string>;
 }
 
 const IO_PINS: PinName[] = [...DIGITAL_PINS, ...ANALOG_PINS];
@@ -37,12 +42,37 @@ const SERVO_MAX_V = 6.0; // TowerPro site: "4.8V – 6V are fine"
 
 const MODE_NAMES = ['LOW', 'HIGH', 'INPUT', 'INPUT_PULLUP'];
 
+/** A blank ATmega328P: 32 KB of 0x0000 (NOP), every pin an input — a board with nothing uploaded yet. */
+export const BLANK_PROGRAM = new Uint16Array(0x4000);
+
+interface BoardRt {
+  id: string;
+  board: ArduinoUno;
+  gnd: number;
+  n5v: number;
+  n3v3: number;
+  net: Map<PinName, number>;
+  subscribers: Map<PinName, ((high: boolean, t: number) => void)[]>;
+  lastInput: Map<PinName, boolean>;
+  serial: string;
+  rx: number[];
+  peakRailMa: number;
+  /** Boards whose RX (D0) is wired to this board's TX (D1). */
+  listeners: BoardRt[];
+}
+
+/** An Arduino pin: which board, which pin. */
+interface Pin {
+  b: BoardRt;
+  pin: PinName;
+}
+
 interface LedRt {
   dev: Device;
   on: boolean;
   amps: number;
-  acc: number; // A·s integrated in the current window
-  last: number; // time of the last integration
+  acc: number;
+  last: number;
   winStart: number;
   avgMa: number;
 }
@@ -51,8 +81,8 @@ interface DriverRt {
   dev: Device;
   motor?: Device;
   stepper: StepperA4988;
-  stepPin?: PinName;
-  dirPin?: PinName;
+  step?: Pin;
+  dir?: Pin;
   coilsOk: boolean;
   powered: boolean;
   awakeSince: number;
@@ -63,12 +93,8 @@ interface DriverRt {
   staticDir?: boolean;
 }
 
-/** A blank ATmega328P: 32 KB of 0x0000 (NOP), every pin an input — a board with nothing uploaded yet. */
-export const BLANK_PROGRAM = new Uint16Array(0x4000);
-
 export class LabSimulation {
-  /** The Arduino on the bench, or null when the bench has no board (circuit only). */
-  readonly board: ArduinoUno | null;
+  readonly boards: BoardRt[] = [];
   readonly nets: Netlist;
   /** Problems that make the circuit meaningless (shorted supplies); the circuit is not solved while present. */
   readonly fatal: Check[] = [];
@@ -78,46 +104,65 @@ export class LabSimulation {
   readonly drivers = new Map<string, DriverRt>();
   private readonly leds = new Map<string, LedRt>();
   private readonly closed = new Map<string, boolean>();
-  /** Reference net (0 V): the Uno's GND, else the first bench supply's −; −1 when nothing can be solved. */
+  private readonly servoPin = new Map<string, Pin>();
+  /** Reference net (0 V): the first board's GND, else the first bench supply's −; −1 when nothing can be solved. */
   private readonly gnd: number;
-  private readonly n5v: number;
-  private readonly n3v3: number;
-  private readonly io: PinName[];
   private clock = 0;
-  private readonly unoNet = new Map<PinName, number>();
-  private readonly subscribers = new Map<PinName, ((high: boolean, t: number) => void)[]>();
   private sol: Solution | null = null;
   private elements: Element[] = [];
   private dirty = true;
   private modeSig = '';
-  private lastInput = new Map<PinName, boolean>();
   private checks = new Map<string, Check>();
-  private serial = '';
-  private rx: number[] = [];
-  private peakRailMa = 0;
-  private servoMa = new Map<string, number>();
+  private staticChecks = new Map<string, Check>();
 
-  constructor(readonly project: Project, program: Uint16Array = BLANK_PROGRAM) {
-    const hasBoard = project.devices.some((d) => d.kind === 'uno');
-    this.board = hasBoard ? new ArduinoUno(program.length ? program : BLANK_PROGRAM) : null;
+  /**
+   * @param programs firmware per board id; a single program goes to the first board (older callers).
+   *   Boards without one run BLANK_PROGRAM.
+   */
+  constructor(readonly project: Project, programs: Record<string, Uint16Array> | Uint16Array = {}) {
     this.nets = new Netlist(project);
     const N = this.nets;
+    const boardDevs = project.devices.filter((d) => d.kind === 'uno');
+    const prog = (id: string, i: number) => {
+      const p = programs instanceof Uint16Array ? (i === 0 ? programs : undefined) : programs[id];
+      return p && p.length ? p : BLANK_PROGRAM;
+    };
+    boardDevs.forEach((d, i) => {
+      const b: BoardRt = {
+        id: d.id,
+        board: new ArduinoUno(prog(d.id, i)),
+        gnd: N.net(`${d.id}.GND1`),
+        n5v: N.net(`${d.id}.5V`),
+        n3v3: N.net(`${d.id}.3V3`),
+        net: new Map(IO_PINS.map((p) => [p, N.net(`${d.id}.${p}`)])),
+        subscribers: new Map(),
+        lastInput: new Map(),
+        serial: '',
+        rx: [],
+        peakRailMa: 0,
+        listeners: [],
+      };
+      this.boards.push(b);
+    });
     const psu = project.devices.find((d) => d.kind === 'psu');
-    this.gnd = hasBoard ? N.net('uno.GND1') : psu ? N.net(`${psu.id}.-`) : N.count ? 0 : -1;
-    this.n5v = hasBoard ? N.net('uno.5V') : -1;
-    this.n3v3 = hasBoard ? N.net('uno.3V3') : -1;
-    this.io = hasBoard ? IO_PINS : [];
-    for (const p of this.io) this.unoNet.set(p, N.net(`uno.${p}`));
+    this.gnd = this.boards.length ? this.boards[0].gnd : psu ? N.net(`${psu.id}.-`) : N.count ? 0 : -1;
     this.findShorts();
-    if (!hasBoard && !psu && project.devices.length)
+    if (!this.boards.length && !psu && project.devices.length)
       this.fatal.push({ level: 'warn', msg: 'Nothing powers this bench yet: add an Arduino or a bench supply from the shelf.' });
+
+    // serial links: TX (D1) of one board wired to RX (D0) of another
+    for (const a of this.boards)
+      for (const b of this.boards) if (a !== b && a.net.get('D1') === b.net.get('D0')) a.listeners.push(b);
 
     for (const d of project.devices) {
       if (d.kind === 'servo') {
-        const sigPin = this.unoPinOn(`${d.id}.SIG`);
-        const s = new Servo(d.id, sigPin ?? 'D0');
+        const sig = this.arduinoPinOn(`${d.id}.SIG`);
+        const s = new Servo(d.id, sig?.pin ?? 'D0');
         s.gate = () => this.servoPowered(d);
-        if (sigPin) this.subscribe(sigPin, (high, t) => s.onPin(sigPin, high, t));
+        if (sig) {
+          this.servoPin.set(d.id, sig);
+          this.subscribe(sig, (high, t) => s.onPin(sig.pin, high, t));
+        }
         this.servos.set(d.id, s);
       } else if (d.kind === 'button') {
         const b = new Button(d.id, 'D0');
@@ -135,31 +180,42 @@ export class LabSimulation {
       }
     }
 
-    this.board?.onPin((pin, high, t) => {
-      this.subscribers.get(pin)?.forEach((f) => f(high, t));
-      this.resolve(t);
-    });
-    this.board?.onSerial((ch) => {
-      this.serial = (this.serial + ch).slice(-8000);
-    });
+    for (const b of this.boards) {
+      b.board.onPin((pin, high, t) => {
+        b.subscribers.get(pin)?.forEach((f) => f(high, t));
+        this.resolve(t);
+      });
+      b.board.onSerial((ch) => {
+        b.serial = (b.serial + ch).slice(-8000);
+        for (const l of b.listeners) l.rx.push(ch.charCodeAt(0));
+      });
+    }
     this.resolve(0);
   }
 
   // ───────── public API ─────────
 
+  /** The first board (most benches have one), or null. */
+  get board(): ArduinoUno | null {
+    return this.boards[0]?.board ?? null;
+  }
+
   get time(): number {
-    return this.board ? this.board.time : this.clock;
+    return this.clock;
   }
 
   step(seconds: number): void {
     let left = seconds;
     while (left > 1e-9) {
       const dt = Math.min(0.001, left);
-      if (this.board) {
-        if (this.rx.length && !this.board.usart.rxBusy) this.board.usart.writeByte(this.rx.shift()!);
-        this.board.run(dt);
-      } else this.clock += dt;
-      const t = this.time;
+      for (const b of this.boards) {
+        // a byte leaves the queue once the receiver takes it (RX enabled and idle); avr8js reports a byte when
+        // transmission starts, so without this the first byte could reach a board before its Serial.begin()
+        if (b.rx.length && !b.board.usart.rxBusy && b.board.usart.writeByte(b.rx[0])) b.rx.shift();
+        b.board.run(dt);
+      }
+      this.clock += dt;
+      const t = this.clock;
       for (const s of this.servos.values()) s.update(t);
       for (const b of this.buttons.values()) b.update(t);
       const sig = this.modeSignature();
@@ -168,13 +224,15 @@ export class LabSimulation {
         this.dirty = true;
       }
       if (this.dirty) this.resolve(t);
-      this.trackRail();
+      this.trackRails();
       left -= dt;
     }
   }
 
-  sendSerial(text: string): void {
-    for (const ch of new TextEncoder().encode(text)) this.rx.push(ch);
+  /** Type into a board's serial port (the first board when no id is given). */
+  sendSerial(text: string, boardId?: string): void {
+    const b = boardId ? this.boards.find((x) => x.id === boardId) : this.boards[0];
+    if (b) for (const ch of new TextEncoder().encode(text)) b.rx.push(ch);
   }
 
   /** The stepper motor's shaft angle, through whichever driver turns it. */
@@ -188,12 +246,13 @@ export class LabSimulation {
     return l ? Math.min(1, this.ledAvgMa(l) / 10) : 0; // relative to 10 mA, the WP7113ID test current
   }
 
-  builtinLed(): number {
-    return this.board?.isHigh('D13') ? 1 : 0;
+  /** The on-board "L" LED (D13) of a board. */
+  builtinLed(boardId?: string): number {
+    const b = boardId ? this.boards.find((x) => x.id === boardId) : this.boards[0];
+    return b?.board.isHigh('D13') ? 1 : 0;
   }
 
   snapshot(): LabSnapshot {
-    const t = this.time;
     const v = (pin: string) => (this.sol ? this.sol.volts[this.nets.net(pin)] : 0);
     const devices: Record<string, PartState> = {};
     for (const d of this.project.devices) {
@@ -226,72 +285,94 @@ export class LabSimulation {
         devices[id] = { V: round(v(`${id}.+`) - v(`${id}.-`), 1) };
       } else if (d.kind === 'psu') {
         devices[id] = { V: d.props.volts ?? 12 };
+      } else if (d.kind === 'uno') {
+        const b = this.boards.find((x) => x.id === id)!;
+        devices[id] = { 'peak 5V mA': Math.round(b.peakRailMa), L: b.board.isHigh('D13') };
       }
     }
     const pins: LabSnapshot['pins'] = {};
-    for (const p of this.io) {
-      const n = this.unoNet.get(p)!;
-      pins[p] = { mode: this.pinMode(p), volts: this.sol && this.sol.driven[n] ? round(this.sol.volts[n], 2) : null };
+    const rails: Record<string, number> = {};
+    const serial: Record<string, string> = {};
+    for (const b of this.boards) {
+      for (const p of IO_PINS) {
+        const n = b.net.get(p)!;
+        pins[`${b.id}.${p}`] = {
+          mode: MODE_NAMES[this.pinState({ b, pin: p })],
+          volts: this.sol && this.sol.driven[n] ? round(this.sol.volts[n] - this.sol.volts[b.gnd], 2) : null,
+        };
+      }
+      rails[b.id] = Math.round(b.peakRailMa);
+      serial[b.id] = b.serial;
     }
     const runtime: Check[] = [];
     for (const s of this.servos.values()) s.warnings.forEach((msg) => runtime.push({ level: 'warn', msg, device: s.id }));
     for (const r of this.drivers.values()) r.stepper.warnings.forEach((msg) => runtime.push({ level: 'warn', msg, device: r.dev.id }));
     return {
-      time: t,
+      time: this.clock,
       devices,
       pins,
-      railMa: Math.round(this.peakRailMa),
+      railMa: Math.max(0, ...Object.values(rails)),
+      rails,
       checks: [...this.fatal, ...this.checks.values(), ...runtime],
-      serial: this.serial,
+      serial,
     };
   }
 
   // ───────── setup helpers ─────────
 
-  /** The Uno I/O pin wired to this pin's net, if any. */
-  unoPinOn(pin: string): PinName | undefined {
+  /** The Arduino I/O pin (on any board) wired to this pin's net, if any. */
+  arduinoPinOn(pin: string): Pin | undefined {
     const n = this.nets.net(pin);
-    return this.io.find((p) => this.unoNet.get(p) === n);
+    for (const b of this.boards) for (const p of IO_PINS) if (b.net.get(p) === n) return { b, pin: p };
+    return undefined;
   }
 
-  private subscribe(pin: PinName, f: (high: boolean, t: number) => void): void {
-    this.subscribers.set(pin, [...(this.subscribers.get(pin) ?? []), f]);
+  /** Pin label for messages: "D2" with one board, "uno2.D2" with several. */
+  private label(p: Pin): string {
+    return this.boards.length > 1 ? `${p.b.id}.${p.pin}` : p.pin;
+  }
+
+  private subscribe(p: Pin, f: (high: boolean, t: number) => void): void {
+    p.b.subscribers.set(p.pin, [...(p.b.subscribers.get(p.pin) ?? []), f]);
   }
 
   private findShorts(): void {
-    const supplies: { name: string; net: number; v: number }[] = this.board
-      ? [
-          { name: 'GND', net: this.gnd, v: 0 },
-          { name: '5V', net: this.n5v, v: 5 },
-          { name: '3V3', net: this.n3v3, v: 3.3 },
-        ]
-      : [];
-    for (let i = 0; i < supplies.length; i++)
-      for (let j = i + 1; j < supplies.length; j++)
-        if (supplies[i].net === supplies[j].net)
-          this.fatal.push({ level: 'error', msg: `Short circuit: the Uno's ${supplies[i].name} and ${supplies[j].name} pins are wired together.` });
+    // every fixed-voltage terminal of every board, by net
+    const owner = new Map<number, { name: string; board: string }>();
+    const claim = (net: number, name: string, board: string) => {
+      const prev = owner.get(net);
+      if (prev && prev.name !== name) {
+        const who = (o: { name: string; board: string }) => (this.boards.length > 1 ? `${o.board} ${o.name}` : `the Uno's ${o.name}`);
+        this.fatal.push({ level: 'error', msg: `Short circuit: ${who(prev)} and ${who({ name, board })} pins are wired together.` });
+      } else if (!prev) owner.set(net, { name, board });
+    };
+    for (const b of this.boards) {
+      claim(b.gnd, 'GND', b.id);
+      claim(b.n5v, '5V', b.id);
+      claim(b.n3v3, '3V3', b.id);
+    }
     for (const d of this.project.devices.filter((x) => x.kind === 'psu')) {
       const p = this.nets.net(`${d.id}.+`);
       const n = this.nets.net(`${d.id}.-`);
       if (p === n) this.fatal.push({ level: 'error', msg: `Short circuit: ${d.id} + and − are wired together.`, device: d.id });
-      for (const s of supplies) {
-        if (s.net === p && s.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} + is wired to the Uno ${s.name} pin: two supplies fight (back-feeding the Uno).`, device: d.id });
-        if (s.net === n && s.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} − is wired to the Uno ${s.name} pin.`, device: d.id });
-      }
-      if (this.board && p === this.gnd && n !== this.gnd) this.fatal.push({ level: 'error', msg: `${d.id} + is wired to GND.`, device: d.id });
+      const op = owner.get(p);
+      const on = owner.get(n);
+      if (op && op.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} + is wired to ${op.board} ${op.name}: two supplies fight (back-feeding the board).`, device: d.id });
+      if (op && op.name === 'GND' && n !== p) this.fatal.push({ level: 'error', msg: `${d.id} + is wired to GND.`, device: d.id });
+      if (on && on.name !== 'GND') this.fatal.push({ level: 'error', msg: `${d.id} − is wired to ${on.board} ${on.name}.`, device: d.id });
     }
   }
 
   private setupDriver(d: Device): void {
     const id = d.id;
-    const stepPin = this.unoPinOn(`${id}.STEP`);
-    const dirPin = this.unoPinOn(`${id}.DIR`);
+    const step = this.arduinoPinOn(`${id}.STEP`);
+    const dir = this.arduinoPinOn(`${id}.DIR`);
     const stepper = new StepperA4988(id, 'STEP' as PinName, 'DIR' as PinName);
-    const rt: DriverRt = { dev: d, stepper, stepPin, dirPin, coilsOk: false, powered: false, awakeSince: -Infinity, enabled: false, reset: true, asleep: false };
+    const rt: DriverRt = { dev: d, stepper, step, dir, coilsOk: false, powered: false, awakeSince: -Infinity, enabled: false, reset: true, asleep: false };
     stepper.gate = () =>
-      rt.powered && !rt.reset && !rt.asleep && rt.enabled && rt.coilsOk && this.time - rt.awakeSince >= SPEC.a4988.wakeMs / 1000;
-    if (stepPin) this.subscribe(stepPin, (high, t) => stepper.onPin(stepper.stepPin, high, t));
-    if (dirPin) this.subscribe(dirPin, (high, t) => stepper.onPin(stepper.dirPin, high, t));
+      rt.powered && !rt.reset && !rt.asleep && rt.enabled && rt.coilsOk && this.clock - rt.awakeSince >= SPEC.a4988.wakeMs / 1000;
+    if (step) this.subscribe(step, (high, t) => stepper.onPin(stepper.stepPin, high, t));
+    if (dir) this.subscribe(dir, (high, t) => stepper.onPin(stepper.dirPin, high, t));
 
     // which motor is on the outputs, and how its coils are paired
     const lead = (out: string) => {
@@ -304,8 +385,7 @@ export class LabSimulation {
     const motor = o['1A']?.motor ?? o['1B']?.motor ?? o['2A']?.motor ?? o['2B']?.motor;
     rt.motor = motor;
     if (motor) {
-      const all = Object.values(o);
-      const sameMotor = all.every((x) => x && x.motor.id === motor.id);
+      const sameMotor = Object.values(o).every((x) => x && x.motor.id === motor.id);
       const c1 = o['1A'] && o['1B'] ? [o['1A'].lead, o['1B'].lead] : null;
       const c2 = o['2A'] && o['2B'] ? [o['2A'].lead, o['2B'].lead] : null;
       const coil = (c: string[] | null) => (c && c[0][0] === c[1][0] && c[0] !== c[1] ? c[0][0] : null);
@@ -334,7 +414,6 @@ export class LabSimulation {
     this.drivers.set(id, rt);
   }
 
-  private staticChecks = new Map<string, Check>();
   private addStatic(key: string, level: Check['level'], msg: string, device?: string): void {
     this.staticChecks.set(key, { level, msg, device });
   }
@@ -348,59 +427,61 @@ export class LabSimulation {
 
   // ───────── circuit ─────────
 
-  private pinState(p: PinName): PinState {
-    const { port, bit } = pinLocation(p);
-    return this.board!.ports[port].pinState(bit);
-  }
-
-  private pinMode(p: PinName): string {
-    return MODE_NAMES[this.pinState(p)];
+  private pinState(p: Pin): PinState {
+    // with Serial.begin() the USART owns D1: the transmitter drives TX high while idle (ATmega328P USART0)
+    if (p.pin === 'D1' && p.b.board.usart.txEnable) return PinState.High;
+    const { port, bit } = pinLocation(p.pin);
+    return p.b.board.ports[port].pinState(bit);
   }
 
   private modeSignature(): string {
     let s = '';
-    for (const p of this.io) s += this.pinState(p);
+    for (const b of this.boards) for (const pin of IO_PINS) s += this.pinState({ b, pin });
     return s;
   }
 
   private buildElements(): Element[] {
     const N = this.nets;
-    const E: Element[] = this.board
-      ? [
-          { kind: 'V', p: this.n5v, n: this.gnd, v: 5, tag: '5V' },
-          { kind: 'V', p: this.n3v3, n: this.gnd, v: 3.3, tag: '3V3' },
-        ]
-      : [];
-    for (const p of this.io) {
-      const n = this.unoNet.get(p)!;
-      const st = this.pinState(p);
-      if (st === PinState.High) {
-        E.push({ kind: 'G', a: n, b: this.gnd, g: 1 / R_SOURCE, tag: `pin:${p}` });
-        E.push({ kind: 'I', from: this.gnd, to: n, i: VCC / R_SOURCE, tag: `pin:${p}` });
-      } else if (st === PinState.Low) {
-        E.push({ kind: 'G', a: n, b: this.gnd, g: 1 / R_SINK, tag: `pin:${p}` });
-      } else if (st === PinState.InputPullUp) {
-        E.push({ kind: 'G', a: n, b: this.n5v, g: 1 / R_PULLUP, tag: `pullup:${p}` });
+    const E: Element[] = [];
+    const seen = new Set<string>();
+    for (const b of this.boards) {
+      // two boards whose rails are wired together share one source, not two ideal sources in parallel
+      for (const [p, v, tag] of [[b.n5v, 5, '5V'], [b.n3v3, 3.3, '3V3']] as const) {
+        const key = `${p}:${b.gnd}:${v}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        E.push({ kind: 'V', p, n: b.gnd, v, tag: `${b.id}:${tag}` });
+      }
+      for (const pin of IO_PINS) {
+        const n = b.net.get(pin)!;
+        const st = this.pinState({ b, pin });
+        if (st === PinState.High) {
+          E.push({ kind: 'G', a: n, b: b.gnd, g: 1 / R_SOURCE });
+          E.push({ kind: 'I', from: b.gnd, to: n, i: VCC / R_SOURCE });
+        } else if (st === PinState.Low) {
+          E.push({ kind: 'G', a: n, b: b.gnd, g: 1 / R_SINK });
+        } else if (st === PinState.InputPullUp) {
+          E.push({ kind: 'G', a: n, b: b.n5v, g: 1 / R_PULLUP });
+        }
       }
     }
     for (const d of this.project.devices) {
       const id = d.id;
       const net = (pin: string) => N.net(`${id}.${pin}`);
       if (d.kind === 'psu') E.push({ kind: 'V', p: net('+'), n: net('-'), v: d.props.volts ?? 12, tag: id });
-      else if (d.kind === 'resistor') E.push({ kind: 'G', a: net('1'), b: net('2'), g: 1 / Math.max(0.01, d.props.ohms ?? 220), tag: id });
+      else if (d.kind === 'resistor') E.push({ kind: 'G', a: net('1'), b: net('2'), g: 1 / Math.max(0.01, d.props.ohms ?? 220) });
       else if (d.kind === 'pot') {
         const pos = this.pots.get(id)!.value;
         const R = SPEC.ptv09.ohms;
-        E.push({ kind: 'G', a: net('1'), b: net('W'), g: 1 / Math.max(1, R * pos), tag: id });
-        E.push({ kind: 'G', a: net('W'), b: net('3'), g: 1 / Math.max(1, R * (1 - pos)), tag: id });
+        E.push({ kind: 'G', a: net('1'), b: net('W'), g: 1 / Math.max(1, R * pos) });
+        E.push({ kind: 'G', a: net('W'), b: net('3'), g: 1 / Math.max(1, R * (1 - pos)) });
       } else if (d.kind === 'button') {
-        if (this.closed.get(id)) E.push({ kind: 'G', a: net('1'), b: net('3'), g: 1 / SPEC.b3f.contactOhms, tag: id });
+        if (this.closed.get(id)) E.push({ kind: 'G', a: net('1'), b: net('3'), g: 1 / SPEC.b3f.contactOhms });
       } else if (d.kind === 'led') {
-        const l = this.leds.get(id)!;
-        if (l.on) {
+        if (this.leds.get(id)!.on) {
           const g = 1 / LED_RS;
-          E.push({ kind: 'G', a: net('A'), b: net('K'), g, tag: id });
-          E.push({ kind: 'I', from: net('K'), to: net('A'), i: g * SPEC.wp7113id.vfTyp, tag: id });
+          E.push({ kind: 'G', a: net('A'), b: net('K'), g });
+          E.push({ kind: 'I', from: net('K'), to: net('A'), i: g * SPEC.wp7113id.vfTyp });
         }
       } else if (d.kind === 'a4988') {
         const g = net('GND');
@@ -415,11 +496,11 @@ export class LabSimulation {
     return E;
   }
 
-  /** Re-solve the circuit at time t and push the result into the Uno pins and the devices. */
+  /** Re-solve the circuit at time t and push the result into the board pins and the devices. */
   private resolve(t: number): void {
     this.dirty = false;
     this.integrateLeds(t);
-    if (this.fatal.length || this.gnd < 0) {
+    if (this.fatal.some((c) => c.level === 'error') || this.gnd < 0 || (!this.boards.length && this.fatal.length)) {
       this.sol = null;
       return;
     }
@@ -443,21 +524,21 @@ export class LabSimulation {
 
   private applyInputs(t: number): void {
     const sol = this.sol!;
-    const board = this.board;
-    if (!board) return;
-    for (const p of this.io) {
-      const st = this.pinState(p);
-      if (st !== PinState.Input && st !== PinState.InputPullUp) continue;
-      const n = this.unoNet.get(p)!;
-      const v = sol.volts[n];
-      if (p[0] === 'A') board.setAnalogInput(p as (typeof ANALOG_PINS)[number], sol.driven[n] ? v : 0);
-      if (!sol.driven[n]) continue; // floating: the pin keeps its last level (reported in checks)
-      let level = this.lastInput.get(p) ?? false;
-      if (v >= M.vihFrac * VCC) level = true;
-      else if (v <= M.vilFrac * VCC) level = false;
-      if (this.lastInput.get(p) !== level || t === 0) {
-        this.lastInput.set(p, level);
-        board.setDigitalInput(p, level);
+    for (const b of this.boards) {
+      for (const pin of IO_PINS) {
+        const st = this.pinState({ b, pin });
+        if (st !== PinState.Input && st !== PinState.InputPullUp) continue;
+        const n = b.net.get(pin)!;
+        const v = sol.volts[n] - sol.volts[b.gnd];
+        if (pin[0] === 'A') b.board.setAnalogInput(pin as (typeof ANALOG_PINS)[number], sol.driven[n] ? v : 0);
+        if (!sol.driven[n]) continue; // floating: the pin keeps its last level (reported in checks)
+        let level = b.lastInput.get(pin) ?? false;
+        if (v >= M.vihFrac * VCC) level = true;
+        else if (v <= M.vilFrac * VCC) level = false;
+        if (b.lastInput.get(pin) !== level || t === 0) {
+          b.lastInput.set(pin, level);
+          b.board.setDigitalInput(pin, level);
+        }
       }
     }
   }
@@ -470,31 +551,47 @@ export class LabSimulation {
     const checks = new Map(this.staticChecks);
     const add = (key: string, level: Check['level'], msg: string, device?: string) => checks.set(key, { level, msg, device });
 
-    // Uno pins: floating inputs, over-current, pins tied together
-    for (const p of this.io) {
-      const n = this.unoNet.get(p)!;
-      const st = this.pinState(p);
-      const wired = N.connected(`uno.${p}`);
-      if (wired && (st === PinState.Input || st === PinState.InputPullUp) && !sol.driven[n])
-        add(`float:${p}`, 'warn', `${p} is an input but nothing drives it while it is open — it floats and reads at random. Use INPUT_PULLUP or a pull-down resistor.`);
-      const vin = sol.volts[n];
-      // analog pins are normally read with analogRead, where a mid-rail voltage is the point
-      if (wired && p[0] === 'D' && st === PinState.Input && sol.driven[n] && vin > M.vilFrac * VCC && vin < M.vihFrac * VCC)
-        add(`mid:${p}`, 'warn', `${p} sits at ${vin.toFixed(2)} V, between the ATmega328P's 0.3·VCC and 0.6·VCC thresholds: its reading is undefined.`);
-      if (st === PinState.High || st === PinState.Low) {
-        const ma = (st === PinState.High ? (VCC - vin) / R_SOURCE : vin / R_SINK) * 1000;
-        if (Math.abs(ma) > M.pinAbsMaxMa)
-          add(`oc:${p}`, 'error', `${p} ${st === PinState.High ? 'sources' : 'sinks'} ~${Math.abs(ma).toFixed(0)} mA — above the ATmega328P's ${M.pinAbsMaxMa} mA absolute maximum per pin. Add a resistor or check for a short.`);
+    // board pins: floating inputs, over-current, pins tied together
+    for (const b of this.boards) {
+      for (const pin of IO_PINS) {
+        const p = { b, pin };
+        const n = b.net.get(pin)!;
+        const st = this.pinState(p);
+        const wired = N.connected(`${b.id}.${pin}`);
+        const L = this.label(p);
+        if (wired && (st === PinState.Input || st === PinState.InputPullUp) && !sol.driven[n])
+          add(`float:${L}`, 'warn', `${L} is an input but nothing drives it while it is open — it floats and reads at random. Use INPUT_PULLUP or a pull-down resistor.`, b.id);
+        const vin = sol.volts[n] - sol.volts[b.gnd];
+        // analog pins are normally read with analogRead, where a mid-rail voltage is the point
+        if (wired && pin[0] === 'D' && st === PinState.Input && sol.driven[n] && vin > M.vilFrac * VCC && vin < M.vihFrac * VCC)
+          add(`mid:${L}`, 'warn', `${L} sits at ${vin.toFixed(2)} V, between the ATmega328P's 0.3·VCC and 0.6·VCC thresholds: its reading is undefined.`, b.id);
+        if (st === PinState.High || st === PinState.Low) {
+          const ma = (st === PinState.High ? (VCC - vin) / R_SOURCE : vin / R_SINK) * 1000;
+          if (Math.abs(ma) > M.pinAbsMaxMa)
+            add(`oc:${L}`, 'error', `${L} ${st === PinState.High ? 'sources' : 'sinks'} ~${Math.abs(ma).toFixed(0)} mA — above the ATmega328P's ${M.pinAbsMaxMa} mA absolute maximum per pin. Add a resistor or check for a short.`, b.id);
+        }
+        const others: Pin[] = [];
+        for (const c of this.boards) for (const q of IO_PINS) if ((c !== b || q !== pin) && c.net.get(q) === n) others.push({ b: c, pin: q });
+        const serialLink = others.length === 1 && others[0].b !== b && ((pin === 'D1' && others[0].pin === 'D0') || (pin === 'D0' && others[0].pin === 'D1'));
+        const key = [L, ...others.map((o) => this.label(o))].sort().join('+');
+        if (others.length && !serialLink && !checks.has(`tied:${key}`))
+          add(`tied:${key}`, 'warn', `${[L, ...others.map((o) => this.label(o))].join(' and ')} are wired together: if both are outputs at different levels they fight.`, b.id);
+        if (serialLink && N.net(`${b.id}.GND1`) !== N.net(`${others[0].b.id}.GND1`))
+          add(`serialgnd:${key}`, 'warn', `${b.id} and ${others[0].b.id} talk over serial but share no ground — the levels have no common reference.`, b.id);
       }
-      const others = this.io.filter((q) => q !== p && this.unoNet.get(q) === n);
-      if (others.length && p < others[0]) add(`tied:${p}`, 'warn', `${[p, ...others].join(' and ')} are wired together: if both are outputs at different levels they fight.`);
+      if (N.connected(`${b.id}.VIN`)) {
+        const vin = V(`${b.id}.VIN`) - sol.volts[b.gnd];
+        if (sol.driven[N.net(`${b.id}.VIN`)] && (vin < SPEC.uno.vinMinV || vin > SPEC.uno.vinMaxV))
+          add(`vin:${b.id}`, 'warn', `${b.id} VIN is ${vin.toFixed(1)} V; the UNO R3 datasheet recommends ${SPEC.uno.vinMinV}–${SPEC.uno.vinMaxV} V.`, b.id);
+      }
     }
 
     // servos
     for (const d of this.project.devices.filter((x) => x.kind === 'servo')) {
       const vplus = V(`${d.id}.V+`) - V(`${d.id}.GND`);
-      if (!this.unoPinOn(`${d.id}.SIG`)) add(`${d.id}.sig`, 'warn', `${d.id}: SIG (orange) is not wired to an Arduino pin.`, d.id);
-      if (this.board && N.net(`${d.id}.GND`) !== this.gnd) add(`${d.id}.gnd`, 'warn', `${d.id}: its GND is not common with the Uno's GND, so the signal has no reference — it will not respond.`, d.id);
+      const sig = this.servoPin.get(d.id);
+      if (!sig) add(`${d.id}.sig`, 'warn', `${d.id}: SIG (orange) is not wired to an Arduino pin.`, d.id);
+      if (sig && N.net(`${d.id}.GND`) !== sig.b.gnd) add(`${d.id}.gnd`, 'warn', `${d.id}: its GND is not common with ${sig.b.id}'s GND, so the signal has no reference — it will not respond.`, d.id);
       else if (vplus < SERVO_MIN_V - 0.05 || vplus > SERVO_MAX_V + 0.05)
         add(`${d.id}.v`, 'warn', `${d.id}: V+ is ${vplus.toFixed(2)} V; the SG90 is specified for ${SERVO_MIN_V}–${SERVO_MAX_V} V.`, d.id);
     }
@@ -508,9 +605,10 @@ export class LabSimulation {
       const a = SPEC.a4988;
       const logicOk = sol.driven[N.net(`${id}.VDD`)] && vdd >= a.vddMinV && vdd <= a.vddMaxV;
       const motorOk = sol.driven[N.net(`${id}.VMOT`)] && vmot >= a.vmotMinV && vmot <= a.vmotMaxV;
-      if (!logicOk) add(`${id}.vdd`, 'warn', `${id}: VDD is ${vdd.toFixed(2)} V — the logic side needs ${a.vddMinV}–${a.vddMaxV} V (e.g. the Uno 5V pin).`, id);
+      if (!logicOk) add(`${id}.vdd`, 'warn', `${id}: VDD is ${vdd.toFixed(2)} V — the logic side needs ${a.vddMinV}–${a.vddMaxV} V (e.g. a board's 5V pin).`, id);
       if (!motorOk) add(`${id}.vmot`, 'warn', `${id}: VMOT is ${vmot.toFixed(1)} V — the motor side needs ${a.vmotMinV}–${a.vmotMaxV} V from its own supply.`, id);
-      if ((r.stepPin || r.dirPin) && N.net(`${id}.GND`) !== this.gnd) add(`${id}.gnd`, 'warn', `${id}: GND is not common with the Uno, so STEP/DIR have no reference.`, id);
+      const ctl = r.step ?? r.dir;
+      if (ctl && N.net(`${id}.GND`) !== ctl.b.gnd) add(`${id}.gnd`, 'warn', `${id}: GND is not common with ${ctl.b.id}, so STEP/DIR have no reference.`, id);
       const level = (pin: string): boolean | null => {
         const n = N.net(`${id}.${pin}`);
         if (!sol.driven[n]) return null;
@@ -535,23 +633,23 @@ export class LabSimulation {
       if (wasAsleep && !r.asleep && r.powered && t > 0) r.awakeSince = t;
       const ms = [level('MS1'), level('MS2'), level('MS3')].map((x) => !!x);
       r.stepper.opts.microsteps = ms[2] ? 16 : ms[0] && ms[1] ? 8 : ms[1] ? 4 : ms[0] ? 2 : 1; // Allegro Table 1
-      // static STEP/DIR (tied to a rail instead of an Arduino pin)
-      if (!r.dirPin) {
+      if (!r.dir) {
         const d = level('DIR');
         if (d !== null && d !== r.staticDir) (r.staticDir = d), r.stepper.onPin(r.stepper.dirPin, d, t);
       }
-      if (!r.stepPin) {
+      if (!r.step) {
         const s = level('STEP');
         if (s !== null && s !== r.staticStep) (r.staticStep = s), r.stepper.onPin(r.stepper.stepPin, s, t);
       }
     }
 
-    // LEDs, buttons, caps, VIN
+    // LEDs, buttons, caps
     for (const l of this.leds.values()) {
       const id = l.dev.id;
       const vd = V(`${id}.A`) - V(`${id}.K`);
       l.amps = l.on ? Math.max(0, (vd - SPEC.wp7113id.vfTyp) / LED_RS) : 0;
-      if (l.amps * 1000 > SPEC.wp7113id.ifMaxMa) add(`${id}.oc`, 'error', `${id}: ~${(l.amps * 1000).toFixed(0)} mA through the LED, above its ${SPEC.wp7113id.ifMaxMa} mA maximum — add or raise the series resistor: R ≥ (supply − ${SPEC.wp7113id.vfTyp} V) / ${SPEC.wp7113id.ifMaxMa} mA.`, id);
+      if (l.amps * 1000 > SPEC.wp7113id.ifMaxMa)
+        add(`${id}.oc`, 'error', `${id}: ~${(l.amps * 1000).toFixed(0)} mA through the LED, above its ${SPEC.wp7113id.ifMaxMa} mA maximum — add or raise the series resistor: R ≥ (supply − ${SPEC.wp7113id.vfTyp} V) / ${SPEC.wp7113id.ifMaxMa} mA.`, id);
       if (vd < -2) add(`${id}.rev`, 'warn', `${id}: reverse-biased — it will not light. The anode (A+, long leg) goes to the positive side.`, id);
     }
     for (const d of this.project.devices.filter((x) => x.kind === 'button')) {
@@ -564,16 +662,12 @@ export class LabSimulation {
     for (const d of this.project.devices.filter((x) => x.kind === 'cap')) {
       if (V(`${d.id}.+`) - V(`${d.id}.-`) < -0.5) add(`${d.id}.rev`, 'error', `${d.id}: reverse voltage across an electrolytic capacitor — swap its leads.`, d.id);
     }
-    if (this.board && N.connected('uno.VIN')) {
-      const vin = V('uno.VIN');
-      if (sol.driven[N.net('uno.VIN')] && (vin < SPEC.uno.vinMinV || vin > SPEC.uno.vinMaxV))
-        add('vin', 'warn', `VIN is ${vin.toFixed(1)} V; the UNO R3 datasheet recommends ${SPEC.uno.vinMinV}–${SPEC.uno.vinMaxV} V.`);
-    }
     this.checks = checks;
   }
 
   private servoPowered(d: Device): boolean {
-    if (!this.sol || !this.board || this.nets.net(`${d.id}.GND`) !== this.gnd) return false;
+    const sig = this.servoPin.get(d.id);
+    if (!this.sol || !sig || this.nets.net(`${d.id}.GND`) !== sig.b.gnd) return false;
     const v = this.sol.volts[this.nets.net(`${d.id}.V+`)] - this.sol.volts[this.nets.net(`${d.id}.GND`)];
     return v >= SERVO_MIN_V - 0.05 && v <= SERVO_MAX_V + 0.05;
   }
@@ -595,27 +689,27 @@ export class LabSimulation {
     return l.winStart === 0 && l.avgMa === 0 ? l.amps * 1000 : l.avgMa;
   }
 
-  /** 5 V rail: solved draw from the 5V and 3V3 pins and high outputs, plus device and board figures. */
-  private trackRail(): void {
-    if (!this.sol || !this.board) return;
-    let a = 0;
-    this.elements.forEach((e, i) => {
-      if (e.kind === 'V' && (e.tag === '5V' || e.tag === '3V3')) a += Math.max(0, this.sol!.sourceAmps.get(i) ?? 0);
-    });
-    for (const p of this.io) {
-      if (this.pinState(p) === PinState.High) a += Math.max(0, (VCC - this.sol.volts[this.unoNet.get(p)!]) / R_SOURCE);
+  /** Each board's 5 V rail: solved draw from its 5V/3V3 pins and high outputs, plus device and board figures. */
+  private trackRails(): void {
+    if (!this.sol) return;
+    for (const b of this.boards) {
+      let a = 0;
+      this.elements.forEach((e, i) => {
+        if (e.kind === 'V' && (e.tag === `${b.id}:5V` || e.tag === `${b.id}:3V3`)) a += Math.max(0, this.sol!.sourceAmps.get(i) ?? 0);
+      });
+      for (const pin of IO_PINS)
+        if (this.pinState({ b, pin }) === PinState.High) a += Math.max(0, (VCC - (this.sol.volts[b.net.get(pin)!] - this.sol.volts[b.gnd])) / R_SOURCE);
+      let ma = a * 1000 + SPEC.uno.boardMaApprox + (b.board.isHigh('D13') ? (VCC / SPEC.uno.builtinLedSeriesOhms) * 1000 : 0);
+      for (const [id, s] of this.servos) if (this.nets.net(`${id}.V+`) === b.n5v && s.moving) ma += SPEC.sg90.movingMaApprox;
+      for (const r of this.drivers.values()) if (this.nets.net(`${r.dev.id}.VDD`) === b.n5v) ma += SPEC.a4988.logicMaMax;
+      b.peakRailMa = Math.max(b.peakRailMa, ma);
+      if (ma > SPEC.uno.usbFuseMa)
+        this.checks.set(`rail:${b.id}`, {
+          level: 'warn',
+          device: b.id,
+          msg: `${this.boards.length > 1 ? `${b.id}: ` : ''}5 V rail draws ~${Math.round(ma)} mA (approx.), above the ${SPEC.uno.usbFuseMa} mA USB fuse on the Uno — power servos from a separate 5 V supply with a common ground.`,
+        });
     }
-    let ma = a * 1000 + SPEC.uno.boardMaApprox + (this.board.isHigh('D13') ? (VCC / SPEC.uno.builtinLedSeriesOhms) * 1000 : 0);
-    for (const [id, s] of this.servos) {
-      const on5v = this.nets.net(`${id}.V+`) === this.n5v;
-      const draw = on5v && s.moving ? SPEC.sg90.movingMaApprox : 0;
-      this.servoMa.set(id, draw);
-      ma += draw;
-    }
-    for (const r of this.drivers.values()) if (this.nets.net(`${r.dev.id}.VDD`) === this.n5v) ma += SPEC.a4988.logicMaMax;
-    this.peakRailMa = Math.max(this.peakRailMa, ma);
-    if (ma > SPEC.uno.usbFuseMa)
-      this.checks.set('rail', { level: 'warn', msg: `5 V rail draws ~${Math.round(ma)} mA (approx.), above the ${SPEC.uno.usbFuseMa} mA USB fuse on the Uno — power servos from a separate 5 V supply with a common ground.` });
   }
 }
 

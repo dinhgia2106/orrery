@@ -47,9 +47,9 @@ function headerLocal(pin: string): V3 {
   return [power[pin] ?? a0, HEADER_TOP, zAnalog];
 }
 
-function pinWorld(pin: string): V3 {
+function pinWorld(pin: string, at: V3 = UNO_POS): V3 {
   const [x, y, z] = headerLocal(pin);
-  return [UNO_POS[0] + x, UNO_POS[1] + y, UNO_POS[2] + z];
+  return [at[0] + x, at[1] + y, at[2] + z];
 }
 
 function FemaleHeader({ pins, at }: { pins: number; at: V3 }) {
@@ -70,7 +70,7 @@ function FemaleHeader({ pins, at }: { pins: number; at: V3 }) {
   );
 }
 
-function Uno({ level }: { level: () => number }) {
+function Uno({ level, at = UNO_POS }: { level: () => number; at?: V3 }) {
   const led = useRef<Mesh>(null);
   useFrame(() => {
     const mat = led.current?.material as MeshStandardMaterial | undefined;
@@ -85,7 +85,7 @@ function Uno({ level }: { level: () => number }) {
   const d8 = d7 - 4.064;
   const a0 = right - 5 * pitch;
   return (
-    <group position={UNO_POS}>
+    <group position={at}>
       <RoundedBox args={[L, PCB_TOP, W]} radius={0.6} position={[0, PCB_TOP / 2, 0]} castShadow receiveShadow>
         <meshStandardMaterial color="#00878f" roughness={0.55} />
       </RoundedBox>
@@ -599,14 +599,17 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
 
   const place = new Map<string, V3>();
   for (const d of project.devices) {
-    if (d.kind === 'uno') continue;
     const def = DEVICES[d.kind];
-    place.set(d.id, [(d.x + def.w / 2 - ucx) / SPREAD, 0, (d.y + def.h / 2 - ucy) / SPREAD]);
+    // boards keep their real size, so they sit at their canvas offset in mm (5 canvas units per mm)
+    const k = d.kind === 'uno' ? 5 : SPREAD;
+    place.set(d.id, d.id === uno?.id ? UNO_POS : [(d.x + def.w / 2 - ucx) / k, d.kind === 'uno' ? UNO_POS[1] : 0, (d.y + def.h / 2 - ucy) / k]);
   }
+  const boards = project.devices.filter((d) => d.kind === 'uno');
 
   const anchor = (ref: string): V3 | null => {
     const [id, pin] = ref.split('.');
-    if (id === 'uno') return pinWorld(pin);
+    const board = boards.find((b) => b.id === id);
+    if (board) return pinWorld(pin, place.get(board.id));
     if (asm && mounted.has(id)) return mountWorld(asm, id);
     const at = place.get(id);
     if (!at) return null;
@@ -619,7 +622,7 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
   const nodes: ReactNode[] = [];
   for (const d of project.devices) {
     const at = place.get(d.id);
-    if (!at || mounted.has(d.id)) continue;
+    if (!at || mounted.has(d.id) || d.kind === 'uno') continue;
     const id = d.id;
     let body: ReactNode = null;
     if (d.kind === 'servo') body = <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
@@ -662,7 +665,9 @@ export default function Scene({ sim, project }: { sim: SimRef; project: Project 
       </directionalLight>
       <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
       <group scale={0.1}>
-        {uno && <Uno level={() => sim.current?.builtinLed() ?? 0} />}
+        {boards.map((b) => (
+          <Uno key={b.id} at={place.get(b.id)} level={() => sim.current?.builtinLed(b.id) ?? 0} />
+        ))}
         {asm && <AssemblyView asm={asm} sim={sim} />}
         {nodes}
         {wires}

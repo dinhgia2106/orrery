@@ -181,7 +181,7 @@ export default function Wiring({ project, onChange, selection, onSelect, snapsho
     const [x, y] = pinPos(hit.d, hit.p);
     let text = `${refs[hit.d.id] ?? hit.d.id} · ${hit.p.label ?? hit.p.name}`;
     if (hit.d.kind === 'uno') {
-      const st = snapshot?.pins[hit.p.name];
+      const st = snapshot?.pins[`${hit.d.id}.${hit.p.name}`];
       if (st) text += ` · ${st.mode}${st.volts === null ? ' · floating' : ` · ${st.volts.toFixed(2)} V`}`;
     }
     return { x, y, text };
@@ -351,7 +351,7 @@ function Symbol({ d, def, snapshot }: { d: Device; def: DeviceDef; snapshot: Lab
   const st = snapshot?.devices[d.id];
   switch (d.kind) {
     case 'uno': {
-      const L = snapshot?.pins.D13?.mode === 'HIGH';
+      const L = snapshot?.pins[`${d.id}.D13`]?.mode === 'HIGH';
       return (
         <g>
           <rect width={def.w} height={def.h} rx={8} className="pcb uno" />

@@ -8,13 +8,13 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 
 ## The lab
 
-1. **Device shelf** — the bench starts empty: add an Arduino UNO R3 (one board per bench for now), micro servo, A4988 driver, NEMA 17 stepper, tactile switch, potentiometer, LED, resistor, electrolytic capacitor and bench supply. Every part has its real pins: the Uno's full headers (D0–D13, A0–A5, 5V, 3V3, VIN, three GND, SDA/SCL = A4/A5), the A4988 carrier's 16 pins (EN, MS1–3, RST, SLP, STEP, DIR, VMOT, GND, 1A/1B/2A/2B, VDD), the B3F's four legs (1–2 and 3–4 are the same contact).
+1. **Device shelf** — the bench starts empty and takes any number of parts: Arduino UNO R3 boards (each with its own sketch; wire one board's TX/D1 to another's RX/D0 and they talk over serial), micro servo, A4988 driver, NEMA 17 stepper, tactile switch, potentiometer, LED, resistor, electrolytic capacitor and bench supply. Every part has its real pins: the Uno's full headers (D0–D13, A0–A5, 5V, 3V3, VIN, three GND, SDA/SCL = A4/A5), the A4988 carrier's 16 pins (EN, MS1–3, RST, SLP, STEP, DIR, VMOT, GND, 1A/1B/2A/2B, VDD), the B3F's four legs (1–2 and 3–4 are the same contact).
 2. **Wiring** (FIG. 1) — click a pin, then another pin, to run a jumper wire. Drag parts, pan, zoom; hover a Uno pin to see its mode and voltage; select a wire to recolour or delete it.
 3. **Sketch** — write Arduino C++ in the editor and press **Compile & run** (Ctrl+Enter). Errors are marked on their lines.
 4. **Run** — with no board the circuit still runs from bench supplies (an LED, a divider, a motor driver's power side); a board with nothing uploaded is a blank chip with every pin an input. With a sketch, the firmware runs on an emulated ATmega328P; the bench circuit is solved from your wiring (DC nodal analysis) every time an output pin changes, so inputs see real voltages: pull-ups, dividers, an open button, a floating pin.
 5. **3D bench** (FIG. 2) — the same project at real scale, laid out like your wiring view.
 
-Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Five templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand) come wired and with prebuilt firmware, so they run even without a compiler.
+Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Six templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand, Two boards over serial) come wired and with prebuilt firmware, so they run even without a compiler.
 
 ### Mechanisms: the Orrery Assembly Format
 
