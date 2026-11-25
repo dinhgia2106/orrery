@@ -1128,6 +1128,50 @@ function BenchWires({ project, sim, dyn, anchor, isBoard }: { project: Project; 
   );
 }
 
+type Controls = { target: Vector3; update: () => void; enabled: boolean } | null;
+
+/**
+ * Camera that the user owns: the view is framed once per bench layout (not on every render, which pinned the
+ * orbit centre), the wheel zooms towards the cursor, double-clicking a part flies to it, and `fitKey` reframes.
+ */
+function CameraRig({ frame, fitKey, focus }: { frame: { target: V3; camera: V3 }; fitKey: string; focus: MutableRefObject<Vector3 | null> }) {
+  const controls = useThree((s) => s.controls) as unknown as Controls;
+  const camera = useThree((s) => s.camera);
+  const goal = useRef<{ target: Vector3; camera: Vector3 } | null>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    if (!controls) return;
+    goal.current = { target: new Vector3(...frame.target), camera: new Vector3(...frame.camera) };
+    if (first.current) {
+      // the first framing is immediate; later ones (fit view, a new layout) glide
+      first.current = false;
+      controls.target.copy(goal.current.target);
+      camera.position.copy(goal.current.camera);
+      controls.update();
+      goal.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controls, fitKey]);
+  useFrame(() => {
+    if (!controls) return;
+    const f = focus.current;
+    if (f) {
+      // keep the viewing direction, come in to about 12 cm (120 mm) unless already closer
+      const dir = camera.position.clone().sub(controls.target);
+      const dist = Math.min(dir.length(), 12);
+      goal.current = { target: f.clone(), camera: f.clone().add(dir.normalize().multiplyScalar(dist)) };
+      focus.current = null;
+    }
+    const g = goal.current;
+    if (!g) return;
+    controls.target.lerp(g.target, 0.2);
+    camera.position.lerp(g.camera, 0.2);
+    controls.update();
+    if (controls.target.distanceTo(g.target) < 0.01 && camera.position.distanceTo(g.camera) < 0.01) goal.current = null;
+  });
+  return null;
+}
+
 export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section; dyn?: MutableRefObject<Dynamics | null> }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
@@ -1136,6 +1180,8 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
   const asm = project.assembly;
   // look at the bench when there is a board, else at the mechanism (scene units are cm)
   const frame = benchFrame(project);
+  const [fit, setFit] = useState(0);
+  const focus = useRef<Vector3 | null>(null);
   const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
   const place = new Map<string, V3>();
@@ -1212,15 +1258,23 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
     );
   }
 
+  const layoutKey = `${frame.target.join(',')}|${frame.camera.join(',')}`;
   return (
-    <Canvas shadows camera={{ position: frame.camera, fov: 40, far: 2000 }} dpr={[1, 2]} gl={{ alpha: true }}>
+    <>
+    <Canvas shadows camera={{ position: frame.camera, fov: 40, near: 0.05, far: 2000 }} dpr={[1, 2]} gl={{ alpha: true }}>
       <ambientLight intensity={0.75} />
       <hemisphereLight args={['#ffffff', '#d8dde6', 0.6]} />
       <directionalLight position={[8, 16, 10]} intensity={1.7} castShadow shadow-mapSize={[2048, 2048]}>
         <orthographicCamera attach="shadow-camera" args={[-35, 35, 35, -35, 0.1, 80]} />
       </directionalLight>
       <pointLight position={[-10, 8, -6]} intensity={25} color="#ffffff" />
-      <group scale={0.1}>
+      <group
+        scale={0.1}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          focus.current = e.point.clone();
+        }}
+      >
         {boards.map((b) => (
           <Uno key={b.id} at={place.get(b.id)} level={() => sim.current?.builtinLed(b.id) ?? 0} />
         ))}
@@ -1234,7 +1288,13 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
       </mesh>
       <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
       <SectionCut section={section} />
-      <OrbitControls makeDefault target={frame.target} maxPolarAngle={Math.PI / 2.05} />
+      <OrbitControls makeDefault zoomToCursor minDistance={0.3} maxDistance={400} maxPolarAngle={Math.PI / 2.05} />
+      <CameraRig frame={frame} fitKey={`${layoutKey}#${fit}`} focus={focus} />
     </Canvas>
+    <div className="view-tools mono">
+      <button onClick={() => setFit((n) => n + 1)} title="Frame the whole bench">fit view</button>
+      <span className="muted">wheel zooms at the cursor · right-drag pans · double-click flies to a part</span>
+    </div>
+    </>
   );
 }
