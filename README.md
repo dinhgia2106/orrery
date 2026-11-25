@@ -14,7 +14,7 @@ An orrery is a clockwork model that reproduces the motion of the real thing. Orr
 4. **Run** — with no board the circuit still runs from bench supplies (an LED, a divider, a motor driver's power side); a board with nothing uploaded is a blank chip with every pin an input. With a sketch, the firmware runs on an emulated ATmega328P; the bench circuit is solved from your wiring (DC nodal analysis) every time an output pin changes, so inputs see real voltages: pull-ups, dividers, an open button, a floating pin.
 5. **3D bench** (FIG. 2) — the same project at real scale, laid out like your wiring view. The wheel zooms towards the cursor, right-drag pans, double-clicking a part flies the camera to it, *fit view* frames the whole bench again. Wires end at the real connector (an SG90's 3-way plug, a header pin) and follow parts mounted on moving links; each wire glows with its net's voltage (full at 5 V), and while a board pin keeps switching a net (servo pulses, PWM, serial) marks run along the wire away from that pin — they show activity, not signal speed.
 
-Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link. Seven templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand, Dexterous hand with 17 DOF on two boards, Two boards over serial) come wired and with prebuilt firmware, so they run even without a compiler.
+Projects autosave in the browser, save/open as `.orrery.json`, and **Share** puts the whole project in a link (compressed, `#z=…`), together with the firmware each board is running when it was built from the current sketch or uploaded as a `.hex` — so the link runs on any machine without a compiler. Opening a link replaces the bench on the table; the hash is then cleared, so a reload keeps your later edits. Seven templates (Blink, Servo sweep, Stepper + A4988, Two-joint robot arm, Five-finger robot hand, Dexterous hand with 17 DOF on two boards, Two boards over serial) come wired and with prebuilt firmware, so they run even without a compiler.
 
 ### Mechanisms: the Orrery Assembly Format
 
@@ -97,6 +97,8 @@ report.ok;        // false on error checks, overlapping parts or an actuator loa
 report.problems;  // one line per reason
 ```
 
+`shareUrl(project, { uno: hexText })` in `src/lab/share.ts` turns the same bench into a link to the public site, so a tool can hand over what it has just checked.
+
 The report holds every check with the time it first appeared, serial output per board, device states and joint angles sampled every 50 ms (configurable), each actuator's peak load as a share of its limit, clashes, tendon tension and slack, and, with dynamics, how far each joint lagged its servo, which parts touched and where dropped objects ended up. Warnings are reported but do not make `ok` false.
 
 ## Real parts, with part numbers
@@ -156,7 +158,9 @@ The CPU runs in 1 ms slices. Every output edge re-solves the bench circuit at th
 
 ```
 src/lab/devices.ts   shelf parts: real pins, internal links, 2D pin positions
-src/lab/project.ts   project file (devices, wires, code), templates, share links
+src/lab/project.ts   project file (devices, wires, code) and its validation
+src/lab/templates.ts the shelf templates (sketches, mechanisms, prebuilt firmware names)
+src/lab/share.ts     share links: shareHash / shareUrl / readShareHash (browser and Node)
 src/lab/circuit.ts   nets from wires; DC solver (modified nodal analysis)
 src/lab/labsim.ts    firmware + circuit + part models; wiring checks
 src/headless/run.ts  runProject: a whole run without a browser, as one JSON report

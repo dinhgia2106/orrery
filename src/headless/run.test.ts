@@ -4,7 +4,8 @@ import serialEchoHex from '../../public/examples/serial-echo.hex?raw';
 import serialPingHex from '../../public/examples/serial-ping.hex?raw';
 import servoSweepHex from '../../public/examples/servo-sweep.hex?raw';
 import type { Assembly } from '../mech/assembly';
-import { TEMPLATES, cloneProject, type Project } from '../lab/project';
+import { cloneProject, type Project } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { runProject } from './run';
 
 const template = (id: string) => cloneProject(TEMPLATES.find((t) => t.id === id)!.project);

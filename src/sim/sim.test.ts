@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ArduinoUno, pinLocation } from './board';
 import { BLINK_ASM_WORDS, blinkProgram } from './demos';
 import { billOfMaterials } from '../lab/bom';
-import { TEMPLATES, cloneProject } from '../lab/project';
+import { cloneProject } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { parseIntelHex, toIntelHex } from './hex';
 import { Button, Led, Servo, StepperA4988 } from './parts';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { jointValues, validateAssembly, type Assembly, type Tendon, type TendonPoint } from './assembly';
 import { linkFrames } from './physics';
 import { TendonModel, deviceHome, tensionShare } from './tendon';

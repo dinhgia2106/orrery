@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Assembly } from './assembly';
 import { Dynamics, G, loadRapier } from './dynamics';
-import { TEMPLATES } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { jointValues } from './assembly';
 import { massProperties } from './physics';
 

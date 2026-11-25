@@ -8,7 +8,8 @@ import stepperHex from '../../public/examples/stepper-a4988.hex?raw';
 import { parseIntelHex } from '../sim/hex';
 import { solve } from './circuit';
 import { LabSimulation } from './labsim';
-import { TEMPLATES, blankProject, cloneProject, newDevice, parseProject, projectFromHash, projectToHash, sketchOf, type Project } from './project';
+import { blankProject, cloneProject, newDevice, parseProject, sketchOf, type Project } from './project';
+import { TEMPLATES } from './templates';
 
 const HEX: Record<string, string> = { blink: blinkHex, 'robot-arm': robotArmHex, 'servo-sweep': servoSweepHex, 'stepper-a4988': stepperHex };
 const template = (id: string) => cloneProject(TEMPLATES.find((t) => t.id === id)!.project);
@@ -197,9 +198,8 @@ describe('wiring mistakes behave like the bench', () => {
 });
 
 describe('project files', () => {
-  it('round-trips through a share link and rejects junk', () => {
+  it('rejects junk and drops wires to devices that are not on the bench', () => {
     const p = template('robot-arm');
-    expect(projectFromHash(projectToHash(p))).toEqual(parseProject(JSON.stringify(p)));
     expect(() => parseProject('{"version":2}')).toThrow();
     const q = parseProject(JSON.stringify({ ...p, wires: [...p.wires, { a: 'ghost.1', b: 'uno.D2' }] }));
     expect(q.wires).toHaveLength(p.wires.length);

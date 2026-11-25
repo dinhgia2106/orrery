@@ -7,7 +7,8 @@ import { fabricationPackage } from './fabricate';
 import armJson from '../../examples/robot-arm/robot-arm.assembly.json';
 import handJson from '../../examples/robot-hand/robot-hand.assembly.json';
 import { LabSimulation } from '../lab/labsim';
-import { TEMPLATES, cloneProject, parseProject } from '../lab/project';
+import { cloneProject, parseProject } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { parseIntelHex } from '../sim/hex';
 import { aiPrompt, jointValues, jointsAtStop, validateAssembly, type Assembly } from './assembly';
 

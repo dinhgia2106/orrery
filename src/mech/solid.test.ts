@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { jointValues, validateAssembly, type Link } from './assembly';
 import { addChild, driveWith, newAssembly, removeLink, setFeatures } from './edit';
-import { TEMPLATES, cloneProject } from '../lab/project';
+import { cloneProject } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import { fabricationPackage, partSvg } from './fabricate';
 import { CLEARANCE_HOLE_MM, featureEdges, linkSolid, manifoldModule, pocketFootprint, toMesh, toStl } from './solid';
 import { crc32 } from './zip';

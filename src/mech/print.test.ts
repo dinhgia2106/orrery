@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES } from '../lab/project';
+import { TEMPLATES } from '../lab/templates';
 import type { Link } from './assembly';
 import { DEFAULT_PRINT, planPart, planStl, printPackage } from './print';
 

@@ -4,7 +4,6 @@ import CodeEditor from './lab/CodeEditor';
 import { COMPILER_URL, compileSketch, compilerHealth, type CompileResult } from './lab/compiler';
 import { DEVICES, SHELF, type DeviceKind } from './lab/devices';
 import {
-  TEMPLATES,
   WIRE_COLORS,
   blankProject,
   cloneProject,
@@ -12,11 +11,10 @@ import {
   parseProject,
   sketchOf,
   withSketch,
-  projectFromHash,
-  projectToHash,
   type Project,
-  type Template,
 } from './lab/project';
+import { isShareHash, readShareHash, shareHash } from './lab/share';
+import { TEMPLATES, type Template } from './lab/templates';
 import { useLab } from './lab/useLab';
 import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiring';
 import { patchJoint } from './mech/edit';
@@ -26,7 +24,7 @@ import { LabMakePanel, LabPartInspector, LabPartsPanel, LabPhysicsPanel, type Ph
 import { readTendons } from './mech/tendon';
 import { aiPrompt, assemblyFromStl, jointValues, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
-import { parseIntelHex } from './sim/hex';
+import { parseIntelHex, toIntelHex } from './sim/hex';
 
 const Scene = lazy(() => import('./Scene'));
 type Section = import('./Scene').Section;
@@ -43,9 +41,8 @@ interface Firmware {
   label: string;
 }
 
+/** The autosaved bench, else the first template (a share link in the URL is opened after the first render). */
 function initialProject(): Project {
-  const fromLink = projectFromHash(window.location.hash);
-  if (fromLink) return fromLink;
   try {
     const saved = localStorage.getItem(STORE_KEY);
     if (saved) return parseProject(saved);
@@ -58,6 +55,13 @@ function initialProject(): Project {
 /** Only devices, their values and the wires matter to the circuit; positions do not. */
 function electricalKey(p: Project): string {
   return JSON.stringify([p.devices.map((d) => [d.id, d.kind, d.props]), p.wires.map((w) => [w.a, w.b])]);
+}
+
+/** Intel HEX of a program, without the blank flash after its last word. */
+function programHex(program: Uint16Array): string {
+  let n = program.length;
+  while (n > 0 && program[n - 1] === 0) n--;
+  return toIntelHex(Array.from(program.subarray(0, n)));
 }
 
 async function fetchHex(name: string): Promise<Uint16Array> {
@@ -239,17 +243,67 @@ export default function App() {
     void compilerHealth().then(setHelper);
   }, []);
 
-  // first run: if the project is an unchanged template, load its prebuilt firmware
+  /** Increments on every bench opened, so a slow firmware fetch for an older one is dropped. */
+  const openSeq = useRef(0);
+  /**
+   * Put a bench on the table and power it: firmware from a share link where it came with one, else the
+   * prebuilt firmware when the sketch is an unchanged template.
+   */
+  const openBench = useCallback(
+    async (p: Project, linkFirmware: Record<string, string>) => {
+      const seq = ++openSeq.current;
+      setProject(p);
+      electrical.current = electricalKey(p);
+      setSelection(null);
+      setResult(null);
+      setActiveBoard('uno');
+      setFirmwares({});
+      boot(p, {});
+      const fw: Record<string, Firmware> = {};
+      const t = TEMPLATES.find((x) => x.project.code === p.code);
+      if (t && p.devices.some((d) => d.kind === 'uno')) {
+        try {
+          Object.assign(fw, await templateFirmware(t));
+        } catch (e) {
+          setNotice((e as Error).message);
+        }
+      }
+      for (const [board, hex] of Object.entries(linkFirmware)) {
+        try {
+          fw[board] = { program: parseIntelHex(hex), code: sketchOf(p, board), label: `${board}: from the link` };
+        } catch {
+          setNotice(`The link's firmware for ${board} is not valid Intel HEX; compile the sketch to run it.`);
+        }
+      }
+      if (seq !== openSeq.current || !Object.keys(fw).length) return;
+      setFirmwares(fw);
+      boot(p, programs(fw));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [boot],
+  );
+
+  /** Open the bench in a share link (#z=… or the older #p=…), then clear the hash so a reload keeps later edits. */
+  const openLink = useCallback(
+    async (hash: string) => {
+      const shared = await readShareHash(hash);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (!shared) return void setNotice('This link does not hold a valid Orrery bench.');
+      await openBench(shared.project, shared.firmware);
+      setNotice(`Opened "${shared.project.name}" from a link.`);
+    },
+    [openBench],
+  );
+
+  // first run: the bench from the link, else the autosaved one; and any link opened later in this tab
   useEffect(() => {
-    const t = TEMPLATES.find((x) => x.project.code === project.code);
-    boot(project, {});
-    if (t && project.devices.some((d) => d.kind === 'uno'))
-      void templateFirmware(t)
-        .then((fw) => {
-          setFirmwares(fw);
-          boot(project, programs(fw));
-        })
-        .catch((e) => setNotice((e as Error).message));
+    if (isShareHash(window.location.hash)) {
+      boot(project, {});
+      void openLink(window.location.hash);
+    } else void openBench(project, {});
+    const onHash = () => isShareHash(window.location.hash) && void openLink(window.location.hash);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -319,21 +373,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const loadTemplate = async (t: Template) => {
-    const p = cloneProject(t.project);
-    setProject(p);
-    electrical.current = electricalKey(p);
-    setSelection(null);
-    setResult(null);
-    try {
-      const fw = await templateFirmware(t);
-      setFirmwares(fw);
-      setActiveBoard('uno');
-      boot(p, programs(fw));
-      setNotice(null);
-    } catch (e) {
-      setNotice((e as Error).message);
-    }
+  const loadTemplate = (t: Template) => {
+    setNotice(null);
+    void openBench(cloneProject(t.project), {});
   };
 
   const compileAndRun = async () => {
@@ -399,13 +441,17 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  /** Copy a link to this bench, with the firmware of every board whose sketch it was built from (or an uploaded .hex). */
   const share = async () => {
-    const url = `${window.location.origin}${window.location.pathname}${projectToHash(project)}`;
+    const fw: Record<string, string> = {};
+    for (const [board, f] of Object.entries(firmwares)) if (f.code === null || f.code === sketchOf(project, board)) fw[board] = programHex(f.program);
+    const hash = await shareHash(project, fw);
+    const url = `${window.location.origin}${window.location.pathname}${hash}`;
     try {
       await navigator.clipboard.writeText(url);
       setNotice('Share link copied to the clipboard.');
     } catch {
-      window.history.replaceState(null, '', projectToHash(project));
+      window.history.replaceState(null, '', hash);
       setNotice('Share link is now in the address bar.');
     }
   };
