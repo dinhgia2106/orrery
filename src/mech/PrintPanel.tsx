@@ -2,7 +2,7 @@
 // filament, bed fit), a preview on the bed, and the files for a slicer.
 import { Grid, OrbitControls } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BufferAttribute, BufferGeometry } from 'three';
 import type { Assembly, Vec3 } from './assembly';
 import { DEFAULT_PRINT, DOWNS, planPart, planStl, printPackage, type Down, type PrintPlan, type PrintSettings } from './print';
@@ -59,24 +59,38 @@ export default function PrintPanel({ asm, download }: { asm: Assembly; download:
   const [plans, setPlans] = useState<Map<string, PrintPlan>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [view, setView] = useState<string | null>(null);
+  const gen = useRef(0);
+
+  useEffect(() => {
+    gen.current++;
+    setPlans(new Map());
+    setView(null);
+    setBusy(null);
+  }, [asm]);
 
   const planAll = async (settings: PrintSettings) => {
+    const run = gen.current;
     setBusy('plan');
     const out = new Map<string, PrintPlan>();
     for (const l of printed) {
+      if (gen.current !== run) return;
       setBusy(`plan ${l.id}`);
       const p = await planPart(l, settings);
+      if (gen.current !== run) return;
       if (p) out.set(l.id, p);
       setPlans(new Map(out));
     }
+    if (gen.current !== run) return;
     setBusy(null);
     if (!view && out.size) setView([...out.keys()][0]);
   };
   const replan = async (id: string, settings: PrintSettings) => {
+    const run = gen.current;
     const l = printed.find((x) => x.id === id);
     if (!l) return;
     setBusy(`plan ${id}`);
     const p = await planPart(l, settings);
+    if (gen.current !== run) return;
     setPlans((m) => {
       const n = new Map(m);
       if (p) n.set(id, p);
@@ -92,6 +106,7 @@ export default function PrintPanel({ asm, download }: { asm: Assembly; download:
   const shown = (view && plans.get(view)) || list[0];
   const total = list.reduce((a, p) => a + (p.massG ?? 0) + (p.supportMassG ?? 0), 0);
   const tooBig = list.filter((p) => !p.fits);
+  const detached = list.filter((p) => p.shells > 1);
   const scaled = list.some((p) => p.scaledFeatures);
 
   return (
@@ -135,8 +150,10 @@ export default function PrintPanel({ asm, download }: { asm: Assembly; download:
         <button
           disabled={!!busy || !printed.length}
           onClick={async () => {
+            const run = gen.current;
             setBusy('zip');
             const { zip, plans: ps } = await printPackage(asm.name, printed, s);
+            if (gen.current !== run) return;
             setPlans(new Map(ps.map((p) => [p.id, p])));
             download(`${asm.name.replace(/[^\w-]+/g, '_')}-print.zip`, zip, 'application/zip');
             setBusy(null);
@@ -159,7 +176,7 @@ export default function PrintPanel({ asm, download }: { asm: Assembly; download:
             </thead>
             <tbody>
               {list.map((p) => (
-                <tr key={p.id} className={`${!p.fits ? 'over' : ''} ${shown?.id === p.id ? 'sel' : ''}`} onClick={() => setView(p.id)}>
+                <tr key={p.id} className={`${!p.fits || p.shells > 1 ? 'over' : ''} ${shown?.id === p.id ? 'sel' : ''}`} onClick={() => setView(p.id)}>
                   <td>
                     {p.id}
                     <br />
@@ -209,10 +226,11 @@ export default function PrintPanel({ asm, download }: { asm: Assembly; download:
             {tooBig.length > 0 && <span className="warn-text"> · too big for the bed: {tooBig.map((p) => p.id).join(', ')}</span>}
           </p>
           {scaled && <p className="small warn-text">At scale {s.scale}, holes and pockets scale too: they will not fit real screws and SG90s.</p>}
+          {detached.length > 0 && <p className="small warn-text">Detached pieces (not one solid): {detached.map((p) => `${p.id} (${p.shells})`).join(', ')}.</p>}
           {shown && <Preview key={`${shown.id}-${shown.down}`} plan={shown} bed={s.bed} />}
           {shown && (
             <p className="small muted mono">
-              {shown.id}: {r1(shown.volumeMm3 / 1000)} cm³ · overhang {Math.round(shown.overhangMm2)} mm² {shown.supports ? `· ${r1(shown.supportVolumeMm3 / 1000)} cm³ of support (orange)` : ''}
+              {shown.id}: {r1(shown.volumeMm3 / 1000)} cm³ · overhang {Math.round(shown.overhangMm2)} mm² {shown.supports ? `· ${r1(shown.supportVolumeMm3 / 1000)} cm³ of support (orange)` : ''}{shown.shells > 1 && <span className="warn-text"> · {shown.shells} detached shells</span>}
             </p>
           )}
         </>

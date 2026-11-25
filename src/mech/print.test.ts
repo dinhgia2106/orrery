@@ -25,6 +25,19 @@ describe('3D print export', () => {
     expect(p.part.bbox.min[2]).toBeCloseTo(0, 3);
     expect(p.volumeMm3).toBeCloseTo(40 * 5 * 40 + 10 * 30 * 10, -1);
     expect(p.massG!).toBeCloseTo(((40 * 5 * 40 + 10 * 30 * 10) / 1000) * 1.24, 1);
+    expect(p.shells).toBe(1);
+  });
+
+  it('reports detached shells when a printed part has a floating boss', async () => {
+    const floating: Link = {
+      id: 'floating',
+      shape: { box: [20, 4, 20] },
+      features: [{ add: { shape: { box: [4, 4, 4] }, position: [0, 10, 0] } }],
+      material: 'PLA',
+      make: 'print',
+    };
+    const p = (await planPart(floating))!;
+    expect(p.shells).toBe(2);
   });
 
   it('standing on its post, the plate overhangs and gets columns from the bed up to it, short of the part by the gap', async () => {

@@ -52,6 +52,8 @@ export interface PrintPlan {
   fits: boolean;
   /** Holes and pockets scale with the part: at scale ≠ 1 they no longer fit real screws and servos. */
   scaledFeatures: boolean;
+  /** Number of disconnected solid shells in the part (1 = one piece). */
+  shells: number;
 }
 
 /** Rotation (degrees about X, Y) that brings the part's `down` axis to −Z. */
@@ -216,6 +218,7 @@ export async function planPart(link: Link, settings: PrintSettings = DEFAULT_PRI
     supportMassG: rho && supports ? (supports.volumeMm3 / 1000) * rho : null,
     fits: size[0] <= settings.bed[0] && size[1] <= settings.bed[1] && size[2] <= settings.bed[2],
     scaledFeatures: settings.scale !== 1 && !!link.features?.some((f) => 'hole' in f || 'pocket' in f),
+    shells: part.shells,
   };
 }
 
@@ -230,6 +233,7 @@ export function planStl(plan: PrintPlan, withSupports = true): Uint8Array {
     triangles: Uint32Array.from([...a.triangles, ...Array.from(b.triangles, (i) => i + offset)]),
     volumeMm3: a.volumeMm3 + b.volumeMm3,
     bbox: a.bbox,
+    shells: a.shells + b.shells,
   };
   return toStl(merged, `${plan.id} with supports`);
 }
@@ -258,6 +262,7 @@ export async function printPackage(name: string, links: Link[], settings: PrintS
   );
   files.push({ name: 'print.csv', data: rows.join('\r\n') + '\r\n' });
   const scaled = plans.filter((p) => p.scaledFeatures).map((p) => p.id);
+  const detached = plans.filter((p) => p.shells > 1);
   files.push({
     name: 'README.txt',
     data: [
@@ -270,6 +275,7 @@ export async function printPackage(name: string, links: Link[], settings: PrintS
       'Load <part>-supports.stl together with <part>.stl, or ignore it and let your slicer generate supports.',
       'Masses are for solid parts; infill makes them lighter.',
       ...(scaled.length ? ['', `Scaled holes and pockets no longer fit real screws and servos: ${scaled.join(', ')}.`] : []),
+      ...(detached.length ? ['', `Detached pieces (more than one solid shell — fix before printing): ${detached.map((p) => `${p.id} (${p.shells})`).join(', ')}.`] : []),
     ].join('\r\n'),
   });
   return { zip: zip(files), plans };

@@ -34,6 +34,7 @@ describe('printable solids', () => {
       ],
     };
     const mesh = toMesh(linkSolid(M, link)!);
+    expect(mesh.shells).toBe(1);
     expect(mesh.bbox.max[1]).toBeCloseTo(10, 6); // boss top: 7 + 6/2
     const stl = toStl(mesh, 'bracket');
     const tris = new DataView(stl.buffer).getUint32(80, true);
@@ -41,6 +42,30 @@ describe('printable solids', () => {
     expect(stl.length).toBe(84 + 50 * tris);
     expect(featureEdges(mesh).length).toBeGreaterThan(0);
   });
+
+  it('reports detached solid shells when a boss floats clear of the body', async () => {
+    const M = await manifoldModule();
+    const floating: Link = {
+      id: 'float',
+      shape: { box: [20, 4, 20] },
+      features: [{ add: { shape: { box: [4, 4, 4] }, position: [0, 10, 0] } }],
+    };
+    const mesh = toMesh(linkSolid(M, floating)!);
+    expect(mesh.shells).toBe(2);
+  });
+
+  it('every printed primitive part across all templates is a single connected solid', async () => {
+    const M = await manifoldModule();
+    for (const tpl of TEMPLATES) {
+      const asm = tpl.project.assembly;
+      if (!asm) continue;
+      for (const link of asm.links) {
+        if (link.make !== 'print' || 'mesh' in link.shape) continue;
+        const mesh = toMesh(linkSolid(M, link)!);
+        expect(mesh.shells, `${tpl.id}:${link.id}`).toBe(1);
+      }
+    }
+  }, 60_000);
 
   it('meshes are exported as they are, and bad features are explained', async () => {
     const M = await manifoldModule();

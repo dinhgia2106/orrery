@@ -105,6 +105,8 @@ export interface SolidMesh {
   triangles: Uint32Array;
   volumeMm3: number;
   bbox: { min: Vec3; max: Vec3 };
+  /** Number of disconnected solid shells (1 = one printable piece). */
+  shells: number;
 }
 
 /** Copy a manifold out of WebAssembly memory and free it. */
@@ -114,7 +116,10 @@ export function toMesh(m: Manifold): SolidMesh {
   const positions = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) positions[i * 3 + k] = mesh.vertProperties[i * mesh.numProp + k];
   const b = m.boundingBox();
-  const out = { positions, triangles: Uint32Array.from(mesh.triVerts), volumeMm3: m.volume(), bbox: { min: [...b.min] as Vec3, max: [...b.max] as Vec3 } };
+  const parts = m.decompose();
+  const shells = parts.length;
+  for (const p of parts) p.delete();
+  const out = { positions, triangles: Uint32Array.from(mesh.triVerts), volumeMm3: m.volume(), bbox: { min: [...b.min] as Vec3, max: [...b.max] as Vec3 }, shells };
   m.delete();
   return out;
 }
