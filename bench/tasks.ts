@@ -7,7 +7,7 @@ import { Netlist } from '../src/lab/circuit';
 import { parseProject, type Project } from '../src/lab/project';
 import { lintProject } from '../src/mcp/tools';
 import type { Assembly, Joint } from '../src/mech/assembly';
-import { linkFrames, massProperties } from '../src/mech/physics';
+import { interference, linkFrames, massProperties } from '../src/mech/physics';
 
 export interface Criterion {
   name: string;
@@ -291,7 +291,613 @@ export const TASKS: Task[] = [
       ];
     },
   },
+
+  // ── timing and output ──
+  {
+    id: 'sos-morse',
+    title: 'SOS in Morse code',
+    prompt:
+      "Blink SOS in Morse code on the Uno's on-board L LED (pin 13), repeating forever: a dot is 200 ms on, a dash 600 ms on, 200 ms off between the marks of a letter, 600 ms off between letters and 1400 ms off before the message repeats. Start with the first dot at power-up.",
+    seconds: 7.6,
+    sampleEvery: 0.005,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const board = ofKind(p, 'uno')[0];
+      if (!board) return [crit('a board', false, 'no Arduino Uno on the bench')];
+      const runs = levelRuns(r, (s) => s.devices[board]?.L === true);
+      const ons = runs.filter((x) => x.level).map((x) => x.ms);
+      const offs = runs.filter((x) => !x.level).map((x) => x.ms);
+      const wantOn = [200, 200, 200, 600, 600, 600, 200, 200, 200];
+      const wantOff = [200, 200, 600, 200, 200, 600, 200, 200, 1400];
+      return [
+        crit('marks: dot dot dot dash dash dash dot dot dot (±20 ms)', within(ons.slice(0, 9), wantOn, 20), `on (ms): ${ons.slice(0, 9).join(', ')}`),
+        crit('gaps 200/600/1400 ms (±20 ms)', within(offs.slice(0, 9), wantOff, 20), `off (ms): ${offs.slice(0, 9).join(', ')}`),
+      ];
+    },
+  },
+  {
+    id: 'pwm-fade',
+    title: 'LED fades in and out',
+    prompt:
+      'An LED with a series resistor on an Arduino Uno fades smoothly from off to full brightness over 1 s, then back to off over 1 s, and repeats (a 2 s cycle). Use PWM.',
+    seconds: 6.5,
+    sampleEvery: 0.02,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const led = ofKind(p, 'led')[0];
+      if (!led) return [crit('an LED', false, 'no LED on the bench')];
+      const xs = r.samples.filter((s) => s.t >= 0.5).map((s) => ({ t: s.t, ma: num(s.devices[led]?.mA) }));
+      const max = Math.max(...xs.map((x) => x.ma));
+      const min = Math.min(...xs.map((x) => x.ma));
+      const ups = xs.slice(1).filter((x, i) => xs[i].ma < max / 2 && x.ma >= max / 2).map((x) => x.t);
+      const periods = ups.slice(1).map((t, i) => t - ups[i]);
+      const mid = xs.filter((x) => x.ma > 0.2 * max && x.ma < 0.8 * max).length / xs.length;
+      return [
+        crit('lights up (≥ 5 mA at the brightest) and goes dark (≤ 10% of that)', max >= 5 && min <= 0.1 * max, `${min.toFixed(1)}–${max.toFixed(1)} mA`),
+        crit('2 s cycle (±0.1 s)', periods.length >= 2 && periods.every((d) => Math.abs(d - 2) <= 0.1), `cycles (s): ${periods.map((d) => d.toFixed(2)).join(', ') || 'none'}`),
+        crit('fades (≥ 40% of the time between 20% and 80% brightness)', mid >= 0.4, `${Math.round(mid * 100)}% of the time`),
+      ];
+    },
+  },
+  {
+    id: 'traffic-light',
+    title: 'Traffic light',
+    prompt:
+      'A traffic light: three LEDs with series resistors on an Arduino Uno, with device ids "red", "yellow" and "green". From power-up: green for 3 s, yellow for 1 s, red for 3 s, then again from green, forever. Exactly one LED is lit at a time.',
+    seconds: 11.5,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const ids = ['red', 'yellow', 'green'];
+      const missing = ids.filter((id) => !p.devices.some((d) => d.id === id && d.kind === 'led'));
+      if (missing.length) return [crit('LEDs red, yellow, green', false, `missing: ${missing.join(', ')}`)];
+      const lit = (t: number) => ids.filter((id) => at(r, t).devices[id]?.lit === true);
+      const want: [number, string][] = [
+        [1.5, 'green'],
+        [2.9, 'green'],
+        [3.1, 'yellow'],
+        [3.9, 'yellow'],
+        [4.1, 'red'],
+        [6.9, 'red'],
+        [7.1, 'green'],
+        [9.9, 'green'],
+        [10.5, 'yellow'],
+      ];
+      const bad = want.filter(([t, id]) => lit(t).join() !== id);
+      return [crit('green 3 s, yellow 1 s, red 3 s, one at a time (±0.1 s)', bad.length === 0, bad.map(([t, id]) => `${t} s: want ${id}, lit ${lit(t).join('+') || 'none'}`).join('; ') || 'all as expected')];
+    },
+  },
+  {
+    id: 'button-counter-serial',
+    title: 'Count presses over serial',
+    prompt:
+      'A push button on an Arduino Uno. Each press prints a line "count: N" on the serial port (9600 baud), N counting from 1. Nothing else is printed. The button bounces; presses come about half a second apart.',
+    seconds: 2.5,
+    mechanics: 'off',
+    inputs: (p) => presses(p, [0.5, 1.0, 1.5, 2.0]),
+    grade: (p, r) => {
+      const got = lines(r, ofKind(p, 'uno')[0]);
+      const want = ['count: 1', 'count: 2', 'count: 3', 'count: 4'];
+      return [crit('four presses print count: 1 … count: 4', same(got, want), `got ${JSON.stringify(got)}`)];
+    },
+  },
+  {
+    id: 'long-press',
+    title: 'Short press toggles, long press turns off',
+    prompt:
+      'An LED with a series resistor and a push button on an Arduino Uno; the LED is off at power-up. A short press (released within 0.5 s) toggles the LED. Holding the button for 1 s turns the LED off at that moment, and releasing it afterwards changes nothing. The button bounces.',
+    seconds: 5.2,
+    mechanics: 'off',
+    inputs: (p) => {
+      const b = ofKind(p, 'button')[0];
+      return b
+        ? [
+            { t: 0.5, press: b, holdMs: 100 },
+            { t: 1.5, press: b, holdMs: 1500 },
+            { t: 3.5, press: b, holdMs: 100 },
+            { t: 4.5, press: b, holdMs: 100 },
+          ]
+        : 'there is no button on the bench';
+    },
+    grade: (p, r) => {
+      const led = ofKind(p, 'led')[0];
+      if (!led) return [crit('an LED', false, 'no LED on the bench')];
+      return checkpoints(r, led, 'lit', [
+        [1.2, true, 'after a short press'],
+        [2.0, true, 'held 0.5 s: nothing yet'],
+        [2.7, false, 'held over 1 s: off'],
+        [3.2, false, 'released after the long press: still off'],
+        [4.2, true, 'short press'],
+        [5.0, false, 'short press'],
+      ]);
+    },
+  },
+  {
+    id: 'pot-threshold',
+    title: 'Threshold with hysteresis',
+    prompt:
+      'A 10 kΩ potentiometer (pin 1 to GND, pin 3 to 5 V, wiper to an analog input) and an LED with a series resistor on an Arduino Uno. The LED turns on when the wiper rises above 3.0 V and off when it falls below 2.0 V; in between it keeps whatever state it had.',
+    seconds: 5,
+    mechanics: 'off',
+    inputs: (p) => {
+      const pot = ofKind(p, 'pot')[0];
+      return pot ? [0.3, 0.7, 0.5, 0.3, 0.5].map((value, i) => ({ t: i, pot, value })) : 'there is no potentiometer on the bench';
+    },
+    grade: (p, r) => {
+      const led = ofKind(p, 'led')[0];
+      if (!led) return [crit('an LED', false, 'no LED on the bench')];
+      return checkpoints(r, led, 'lit', [
+        [0.9, false, 'wiper 1.5 V'],
+        [1.9, true, 'wiper 3.5 V'],
+        [2.9, true, 'wiper 2.5 V after 3.5 V'],
+        [3.9, false, 'wiper 1.5 V'],
+        [4.9, false, 'wiper 2.5 V after 1.5 V'],
+      ]);
+    },
+  },
+
+  // ── serial protocols ──
+  {
+    id: 'serial-led-command',
+    title: 'Serial commands for the LED',
+    prompt:
+      'An Arduino Uno at 9600 baud reads lines ending in "\\n". "on" and "off" switch its on-board L LED (pin 13), "toggle" flips it; each is answered with the line "ok". Any other line is answered "error" and changes nothing. The LED is off at power-up and nothing is printed at start-up.',
+    seconds: 1.8,
+    mechanics: 'off',
+    inputs: (p) => {
+      const board = ofKind(p, 'uno')[0];
+      return board ? ['on', 'blink', 'toggle', 'toggle', 'off'].map((cmd, i) => ({ t: 0.3 * (i + 1), serial: `${cmd}\n`, board })) : 'there is no board on the bench';
+    },
+    grade: (p, r) => {
+      const board = ofKind(p, 'uno')[0];
+      const got = lines(r, board);
+      return [
+        crit('answers ok, error, ok, ok, ok', same(got, ['ok', 'error', 'ok', 'ok', 'ok']), `got ${JSON.stringify(got)} (sent on, blink, toggle, toggle, off)`),
+        ...checkpoints(r, board, 'L', [
+          [0.5, true, 'on'],
+          [0.8, true, 'unknown command'],
+          [1.1, false, 'toggle'],
+          [1.4, true, 'toggle'],
+          [1.7, false, 'off'],
+        ]),
+      ];
+    },
+  },
+  {
+    id: 'serial-servo-command',
+    title: 'Serial angle commands for a servo',
+    prompt:
+      'An SG90 servo on an Arduino Uno (9600 baud). A received line holding a whole number from 0 to 180 moves the servo to that angle and is answered "angle N". Any other line (out of range, not a number) is answered "error" and the servo stays where it is. Lines end in "\\n".',
+    seconds: 2.4,
+    mechanics: 'off',
+    inputs: (p) => {
+      const board = ofKind(p, 'uno')[0];
+      return board ? ['30', '150', '200', 'abc', '90'].map((cmd, i) => ({ t: 0.2 + 0.4 * i, serial: `${cmd}\n`, board })) : 'there is no board on the bench';
+    },
+    grade: (p, r) => {
+      const servo = ofKind(p, 'servo')[0];
+      if (!servo) return [crit('a servo', false, 'no servo on the bench')];
+      return [
+        crit('answers angle 30, angle 150, error, error, angle 90', same(lines(r, ofKind(p, 'uno')[0]), ['angle 30', 'angle 150', 'error', 'error', 'angle 90']), `got ${JSON.stringify(lines(r, ofKind(p, 'uno')[0]))}`),
+        ...angleCheckpoints(r, servo, [
+          [0.55, 30, 2],
+          [0.95, 150, 2],
+          [1.75, 150, 2],
+          [2.35, 90, 2],
+        ]),
+      ];
+    },
+  },
+  {
+    id: 'serial-adc-read',
+    title: 'Read the ADC on request',
+    prompt:
+      'A 10 kΩ potentiometer (pin 1 to GND, pin 3 to 5 V) with its wiper on A0 of an Arduino Uno. When the Uno receives the line "read" (9600 baud, lines end in "\\n") it answers with one line: the raw analogRead(A0) value as a decimal number. Nothing else is printed.',
+    seconds: 1.6,
+    mechanics: 'off',
+    inputs: (p) => {
+      const pot = ofKind(p, 'pot')[0];
+      const board = ofKind(p, 'uno')[0];
+      if (!pot || !board) return 'needs a potentiometer and a board';
+      return [
+        { t: 0, pot, value: 0.25 },
+        { t: 0.3, serial: 'read\n', board },
+        { t: 0.5, pot, value: 0.75 },
+        { t: 0.8, serial: 'read\n', board },
+        { t: 1.0, pot, value: 1 },
+        { t: 1.3, serial: 'read\n', board },
+      ];
+    },
+    grade: (p, r) => {
+      const got = lines(r, ofKind(p, 'uno')[0]).map(Number);
+      const want = [256, 767, 1023];
+      return [crit('answers ≈ 256, 767, 1023 (±4 counts)', got.length === 3 && got.every((x, i) => Math.abs(x - want[i]) <= 4), `got ${JSON.stringify(lines(r, ofKind(p, 'uno')[0]))} for the wiper at 1/4, 3/4 and the top`)];
+    },
+  },
+
+  // ── circuits ──
+  {
+    id: 'led-from-psu',
+    title: 'LED on a 9 V supply, no Arduino',
+    prompt:
+      'Light a red LED (Kingbright WP7113ID) from a 9 V bench supply with no Arduino on the bench. Choose the series resistor so the LED carries 10 mA (±1 mA).',
+    seconds: 0.2,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const led = ofKind(p, 'led')[0];
+      const psu = p.devices.find((d) => d.kind === 'psu');
+      return [
+        crit('no Arduino', ofKind(p, 'uno').length === 0, `${ofKind(p, 'uno').length} board(s)`),
+        crit('a 9 V supply', psu?.props.volts === 9, `supply: ${psu ? `${psu.props.volts} V` : 'none'}`),
+        crit('LED at 10 ± 1 mA', !!led && Math.abs(num(r.final[led]?.mA) - 10) <= 1, led ? `${r.final[led]?.mA} mA` : 'no LED'),
+      ];
+    },
+  },
+  {
+    id: 'divider-adc',
+    title: 'Voltage divider into the ADC',
+    prompt:
+      "Two resistors, each at least 1 kΩ, divide the Uno's 5 V down to 2.0 V (±0.05 V) on A0. The sketch prints the voltage it measures on A0 in millivolts once per second as a line \"mV=<n>\" (9600 baud).",
+    seconds: 2.5,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const rs = p.devices.filter((d) => d.kind === 'resistor');
+      const last = lines(r, ofKind(p, 'uno')[0]).at(-1) ?? '';
+      const mv = Number(/^mV=(-?\d+)$/.exec(last)?.[1]);
+      return [
+        crit('two resistors of at least 1 kΩ', rs.length >= 2 && rs.every((d) => (d.props.ohms ?? 220) >= 1000), rs.map((d) => `${d.id} ${d.props.ohms ?? 220} Ω`).join(', ') || 'none'),
+        crit('measures 2000 ± 50 mV', Math.abs(mv - 2000) <= 50, `last line: ${JSON.stringify(last)}`),
+      ];
+    },
+  },
+
+  // ── servos ──
+  {
+    id: 'two-servos-mirror',
+    title: 'Two servos mirror a pot',
+    prompt:
+      'A 10 kΩ potentiometer (pin 1 to GND, pin 3 to 5 V, wiper to A0) and two SG90 servos with device ids "servo1" and "servo2". servo1 follows the pot from 0° (pot at GND) to 180° (pot at 5 V); servo2 always sits at the mirror angle, 180° minus servo1. Power both servos from a 5 V bench supply, not from the Uno.',
+    seconds: 3,
+    mechanics: 'off',
+    inputs: (p) => {
+      const pot = ofKind(p, 'pot')[0];
+      return pot
+        ? [
+            { t: 0, pot, value: 0 },
+            { t: 1, pot, value: 1 },
+            { t: 2, pot, value: 0.25 },
+          ]
+        : 'there is no potentiometer on the bench';
+    },
+    grade: (p, r) => {
+      if (!['servo1', 'servo2'].every((id) => p.devices.some((d) => d.id === id && d.kind === 'servo'))) return [crit('servo1 and servo2', false, 'missing')];
+      return [
+        ...angleCheckpoints(r, 'servo1', [
+          [0.95, 0, 5],
+          [1.95, 180, 5],
+          [2.95, 45, 5],
+        ]),
+        ...angleCheckpoints(r, 'servo2', [
+          [0.95, 180, 5],
+          [1.95, 0, 5],
+          [2.95, 135, 5],
+        ]),
+        servosOnSupply(p, ['servo1', 'servo2']),
+      ];
+    },
+  },
+  {
+    id: 'servo-slow-sweep',
+    title: 'Slow, even servo sweep',
+    prompt:
+      'An SG90 on an Arduino Uno sweeps from 0° to 180° in 3 s at a constant speed, then back to 0° in 3 s, forever, starting at 0° at power-up. (The servo itself would turn much faster; the sketch must pace it.)',
+    seconds: 7,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const servo = ofKind(p, 'servo')[0];
+      if (!servo) return [crit('a servo', false, 'no servo on the bench')];
+      const tri = (t: number) => {
+        const u = t % 6;
+        return u < 3 ? 60 * u : 180 - 60 * (u - 3);
+      };
+      const off = r.samples.filter((s) => s.t >= 0.5).map((s) => ({ t: s.t, d: Math.abs(num(s.devices[servo]?.angle) - tri(s.t)) }));
+      const worst = off.reduce((a, b) => (b.d > a.d ? b : a), { t: 0, d: 0 });
+      return [crit('follows 60°/s up and down (±8°)', worst.d <= 8, `largest gap ${worst.d.toFixed(1)}° at ${worst.t} s`)];
+    },
+  },
+  {
+    id: 'six-servo-supply',
+    title: 'Six servos on a bench supply',
+    prompt:
+      "Six SG90 servos on one Arduino Uno move together: all at 0° for 1 s, all at 180° for 1 s, repeating, starting at 0° at power-up. Together they draw more than the Uno's USB supply can give: power them from a 5 V bench supply and give it a common ground with the Uno.",
+    seconds: 3,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const servos = ofKind(p, 'servo');
+      if (servos.length < 6) return [crit('six servos', false, `${servos.length} servo(s)`)];
+      const all = (t: number, ok: (a: number) => boolean) => servos.every((id) => ok(num(at(r, t).devices[id]?.angle)));
+      return [
+        crit('all at 0° at 0.9 s, 180° at 1.9 s, 0° at 2.9 s (±5°)', all(0.9, (a) => a <= 5) && all(1.9, (a) => a >= 175) && all(2.9, (a) => a <= 5), servos.map((id) => `${id}: ${[0.9, 1.9, 2.9].map((t) => num(at(r, t).devices[id]?.angle).toFixed(0)).join('/')}`).join('; ')),
+        servosOnSupply(p, servos),
+      ];
+    },
+  },
+
+  // ── steppers ──
+  {
+    id: 'stepper-pot-position',
+    title: 'Stepper follows a pot',
+    prompt:
+      "A NEMA 17 stepper on an A4988 (12 V bench supply, the VMOT capacitor Pololu recommends) follows a 10 kΩ potentiometer (pin 1 to GND, pin 3 to 5 V, wiper to an analog input): the shaft's power-up position is 0°, the pot at GND means 0° and at 5 V half a turn (180°), linearly in between. The pot may be anywhere at power-up. Don't lose steps.",
+    seconds: 5,
+    mechanics: 'off',
+    inputs: (p) => {
+      const pot = ofKind(p, 'pot')[0];
+      return pot
+        ? [
+            { t: 0.5, pot, value: 1 },
+            { t: 2, pot, value: 0.25 },
+            { t: 3.5, pot, value: 0 },
+          ]
+        : 'there is no potentiometer on the bench';
+    },
+    grade: (p, r) => {
+      const motor = ofKind(p, 'stepper')[0];
+      if (!motor) return [crit('a stepper', false, 'no stepper on the bench')];
+      const a = (t: number) => num(at(r, t).devices[motor]?.angle);
+      const s = Math.sign(a(1.9)) || 1;
+      return [
+        ...[
+          [0.45, 90, 'pot at mid-travel since power-up'],
+          [1.9, 180, 'pot at 5 V'],
+          [3.4, 45, 'pot at 1/4'],
+          [4.9, 0, 'pot at GND'],
+        ].map(([t, want, why]) => crit(`${want}° at ${t} s (±3.6°)`, Math.abs(a(t as number) - s * (want as number)) <= 3.6, `${a(t as number)}° (${why})`)),
+        noStepperTrouble(r),
+      ];
+    },
+  },
+  {
+    id: 'stepper-button-jog',
+    title: 'Quarter turn per press',
+    prompt:
+      'A NEMA 17 stepper on an A4988 (12 V bench supply, the VMOT capacitor Pololu recommends) and a push button on an Arduino Uno. Each press turns the shaft exactly a quarter turn, always in the same direction. The button bounces; presses come about a second apart.',
+    seconds: 3.5,
+    mechanics: 'off',
+    inputs: (p) => presses(p, [0.5, 1.5, 2.5]),
+    grade: (p, r) => {
+      const motor = ofKind(p, 'stepper')[0];
+      if (!motor) return [crit('a stepper', false, 'no stepper on the bench')];
+      const a = (t: number) => num(at(r, t).devices[motor]?.angle);
+      const s = Math.sign(a(1.4)) || 1;
+      return [
+        crit('90°, 180°, 270° after the presses, one direction (±1.8°)', [1.4, 2.4, 3.4].every((t, i) => Math.abs(a(t) - s * 90 * (i + 1)) <= 1.8), `${[0.4, 1.4, 2.4, 3.4].map((t) => `${a(t)}°`).join(' → ')}`),
+        noStepperTrouble(r),
+      ];
+    },
+  },
+  {
+    id: 'stepper-microstep',
+    title: 'One revolution in 1/16 microsteps',
+    prompt:
+      'Turn a NEMA 17 stepper exactly one revolution after power-up using the A4988 in 1/16 microstep mode, then stop and hold. 12 V bench supply with the VMOT capacitor Pololu recommends.',
+    seconds: 4.5,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const motor = ofKind(p, 'stepper')[0];
+      const driver = ofKind(p, 'a4988')[0];
+      if (!motor || !driver) return [crit('a stepper and an A4988', false, 'missing on the bench')];
+      const end = num(r.final[motor]?.angle);
+      return [
+        crit('1/16 microstep mode', r.final[driver]?.microsteps === 16, `driver in 1/${String(r.final[driver]?.microsteps)} steps`),
+        crit('one revolution (±0.3°)', Math.abs(Math.abs(end) - 360) <= 0.3, `final angle ${end}°`),
+        crit('stopped by 4 s', num(at(r, 4).devices[motor]?.angle) === end, `${num(at(r, 4).devices[motor]?.angle)}° at 4 s, ${end}° at 4.5 s`),
+        noStepperTrouble(r),
+      ];
+    },
+  },
+  {
+    id: 'stepper-speed',
+    title: 'Stepper at 60 rpm',
+    prompt: 'A NEMA 17 stepper on an A4988 (12 V bench supply, the VMOT capacitor Pololu recommends) turns continuously at exactly 60 rpm, starting at power-up.',
+    seconds: 3.2,
+    mechanics: 'off',
+    grade: (p, r) => {
+      const motor = ofKind(p, 'stepper')[0];
+      if (!motor) return [crit('a stepper', false, 'no stepper on the bench')];
+      const d1 = num(at(r, 2).devices[motor]?.angle) - num(at(r, 1).devices[motor]?.angle);
+      const d2 = num(at(r, 3).devices[motor]?.angle) - num(at(r, 2).devices[motor]?.angle);
+      return [crit('360°/s in each of two seconds (±1%)', [d1, d2].every((d) => Math.abs(Math.abs(d) - 360) <= 3.6) && Math.sign(d1) === Math.sign(d2), `${d1.toFixed(1)}° from 1 to 2 s, ${d2.toFixed(1)}° from 2 to 3 s`), noStepperTrouble(r)];
+    },
+  },
+
+  // ── several boards ──
+  {
+    id: 'two-board-servo',
+    title: 'Pot on one board, servo on the other',
+    prompt:
+      'Two Arduino Unos. A 10 kΩ potentiometer (pin 1 to GND, pin 3 to 5 V, wiper to an analog input) is on the first board, an SG90 servo on the second. The servo follows the pot: 0° with the pot at GND, 180° at 5 V, linearly between. The boards talk over serial (TX → RX).',
+    seconds: 3,
+    mechanics: 'off',
+    inputs: (p) => {
+      const pot = ofKind(p, 'pot')[0];
+      return pot
+        ? [
+            { t: 0, pot, value: 0 },
+            { t: 1, pot, value: 1 },
+            { t: 2, pot, value: 0.5 },
+          ]
+        : 'there is no potentiometer on the bench';
+    },
+    grade: (p, r) => {
+      const pot = ofKind(p, 'pot')[0];
+      const servo = ofKind(p, 'servo')[0];
+      if (!servo || ofKind(p, 'uno').length < 2) return [crit('two boards and a servo', false, 'missing')];
+      const potBoards = boardsWiredTo(p, pot);
+      const servoBoards = boardsWiredTo(p, servo);
+      return [
+        crit('pot and servo on different boards', potBoards.length === 1 && servoBoards.length === 1 && potBoards[0] !== servoBoards[0], `pot on ${potBoards.join(',') || 'none'}, servo on ${servoBoards.join(',') || 'none'}`),
+        ...angleCheckpoints(r, servo, [
+          [0.95, 0, 5],
+          [1.95, 180, 5],
+          [2.95, 90, 5],
+        ]),
+      ];
+    },
+  },
+
+  // ── mechanisms ──
+  {
+    id: 'gripper-close',
+    title: 'Two-finger gripper on one servo',
+    prompt:
+      'A two-finger gripper (Orrery assembly): two fingers on hinges on a palm, both driven by ONE SG90 (couple the second finger to the first). Put a small fingertip pad link at the tip of each finger, with link ids "pad1" and "pad2". At power-up the gripper is open, pad centres at least 30 mm apart; each press of a push button closes it (pad centres at most 10 mm apart, fingers not overlapping) or opens it again.',
+    seconds: 2.5,
+    mechanics: 'static',
+    inputs: (p) => presses(p, [0.5, 1.5]),
+    grade: async (p, r) => {
+      const asm = p.assembly;
+      if (!asm) return [crit('an assembly', false, 'the project has no (valid) assembly')];
+      if (!['pad1', 'pad2'].every((id) => asm.links.some((l) => l.id === id))) return [crit('links pad1 and pad2', false, 'missing')];
+      const gap = (t: number) => {
+        const f = linkFrames(asm, new Map(Object.entries(at(r, t).joints ?? {})));
+        return new Vector3().setFromMatrixPosition(f.get('pad1')!).distanceTo(new Vector3().setFromMatrixPosition(f.get('pad2')!));
+      };
+      const clashes = (await interference(asm, new Map(Object.entries(at(r, 1.4).joints ?? {})))).filter((c) => c.volumeMm3 >= 1);
+      const [open, closed, again] = [gap(0.4), gap(1.4), gap(2.4)];
+      return [
+        crit('one servo', ofKind(p, 'servo').length === 1, `${ofKind(p, 'servo').length} servo(s)`),
+        crit('open at power-up (≥ 30 mm)', open >= 30, `${open.toFixed(1)} mm`),
+        crit('closed after a press (≤ 10 mm)', closed <= 10, `${closed.toFixed(1)} mm`),
+        crit('nothing overlaps when closed', clashes.length === 0, clashes.map((c) => `${c.a}/${c.b} ${c.volumeMm3.toFixed(0)} mm³`).join(', ') || 'none'),
+        crit('open again after the next press (≥ 30 mm)', again >= 30, `${again.toFixed(1)} mm`),
+      ];
+    },
+  },
+  {
+    id: 'pan-tilt',
+    title: 'Pan-tilt head on two pots',
+    prompt:
+      'A pan-tilt head (Orrery assembly) carrying a camera link with link id "camera" whose local +X axis is the viewing direction (level at home). A pan servo turns it about the vertical axis, a tilt servo on the pan stage tilts it upward. Potentiometer "panpot" sets pan from -90° to +90° (mid-travel = straight ahead), potentiometer "tiltpot" sets tilt from 0° (level, pot at GND) to 60° up (pot at 5 V). Wire each pot with pin 1 to GND and pin 3 to 5 V.',
+    seconds: 3,
+    mechanics: 'static',
+    inputs: (p) => {
+      if (!['panpot', 'tiltpot'].every((id) => p.devices.some((d) => d.id === id && d.kind === 'pot'))) return 'needs potentiometers "panpot" and "tiltpot"';
+      return [
+        { t: 0, pot: 'panpot', value: 0.5 },
+        { t: 0, pot: 'tiltpot', value: 0 },
+        { t: 1, pot: 'panpot', value: 0 },
+        { t: 1, pot: 'tiltpot', value: 1 },
+        { t: 2, pot: 'panpot', value: 1 },
+        { t: 2, pot: 'tiltpot', value: 0.5 },
+      ];
+    },
+    grade: (p, r) => {
+      const asm = p.assembly;
+      if (!asm?.links.some((l) => l.id === 'camera')) return [crit('a camera link', false, 'no link "camera"')];
+      const look = (t: number) => {
+        const f = linkFrames(asm, new Map(Object.entries(at(r, t).joints ?? {}))).get('camera')!;
+        const d = new Vector3(1, 0, 0).applyQuaternion(new Quaternion().setFromRotationMatrix(f)).normalize();
+        return { az: (Math.atan2(-d.z, d.x) * 180) / Math.PI, el: (Math.asin(d.y) * 180) / Math.PI };
+      };
+      const [a, b, c] = [look(0.95), look(1.95), look(2.95)];
+      const fmt = (x: { az: number; el: number }) => `pan ${x.az.toFixed(1)}°, tilt ${x.el.toFixed(1)}°`;
+      return [
+        crit('straight ahead and level (±5°)', Math.abs(a.az) <= 5 && Math.abs(a.el) <= 5, fmt(a)),
+        crit('panned 90° one way, tilted 60° (±5°)', Math.abs(Math.abs(b.az) - 90) <= 5 && Math.abs(b.el - 60) <= 5, fmt(b)),
+        crit('panned 90° the other way, tilted 30° (±5°)', Math.abs(Math.abs(c.az) - 90) <= 5 && Math.sign(c.az) === -Math.sign(b.az) && Math.abs(c.el - 30) <= 5, fmt(c)),
+      ];
+    },
+  },
+  {
+    id: 'arm-two-joint-reach',
+    title: 'Two-joint arm reaches a point',
+    prompt:
+      'A two-joint arm (Orrery assembly) in a vertical plane: an upper arm 100 mm between the shoulder and elbow axes and a forearm 80 mm from the elbow axis to the tip, each joint turned by its own SG90. Name the shoulder joint "shoulder" and put a small link "tip" at the end of the forearm. At power-up the arm points straight up. A press of a push button moves the tip to 120 mm out and 60 mm up from the shoulder axis; the next press brings it back straight up. Power the servos from a 5 V bench supply.',
+    seconds: 2.5,
+    mechanics: 'static',
+    inputs: (p) => presses(p, [0.5, 1.5]),
+    grade: (p, r) => {
+      const asm = p.assembly;
+      const shoulder = asm?.joints.find((j) => j.id === 'shoulder');
+      if (!asm || !shoulder || !asm.links.some((l) => l.id === 'tip')) return [crit('joint "shoulder" and link "tip"', false, 'missing')];
+      const where = (t: number) => {
+        const f = linkFrames(asm, new Map(Object.entries(at(r, t).joints ?? {})));
+        const v = new Vector3().setFromMatrixPosition(f.get('tip')!).sub(new Vector3().setFromMatrixPosition(f.get(shoulder.child)!));
+        return { out: Math.hypot(v.x, v.z), up: v.y };
+      };
+      const fmt = (x: { out: number; up: number }) => `${x.out.toFixed(1)} mm out, ${x.up.toFixed(1)} mm up`;
+      const near = (x: { out: number; up: number }, out: number, up: number) => Math.hypot(x.out - out, x.up - up) <= 5;
+      const [a, b, c] = [where(0.4), where(1.4), where(2.4)];
+      return [
+        crit('straight up at power-up (tip 180 mm above the shoulder, ±5 mm)', near(a, 0, 180), fmt(a)),
+        crit('tip at 120 mm out, 60 mm up after a press (±5 mm)', near(b, 120, 60), fmt(b)),
+        crit('straight up again after the next press (±5 mm)', near(c, 0, 180), fmt(c)),
+      ];
+    },
+  },
 ];
+
+// ── grading helpers for the tasks above ──
+
+/** Serial output of a board as trimmed, non-empty lines. */
+function lines(r: RunReport, board: string | undefined): string[] {
+  return (board ? r.serial[board] ?? '' : '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+}
+
+const same = (a: string[], b: string[]) => JSON.stringify(a) === JSON.stringify(b);
+const within = (got: number[], want: number[], tol: number) => got.length === want.length && got.every((x, i) => Math.abs(x - want[i]) <= tol);
+
+/** Durations (ms) of the runs of a boolean read from the samples, from the first rising edge; the last, unfinished run is dropped. */
+function levelRuns(r: RunReport, level: (s: Sample) => boolean): { level: boolean; ms: number }[] {
+  const out: { level: boolean; ms: number }[] = [];
+  let start: number | null = null;
+  let cur = false;
+  for (const s of r.samples) {
+    const l = level(s);
+    if (start === null) {
+      if (l) {
+        start = s.t;
+        cur = true;
+      }
+      continue;
+    }
+    if (l !== cur) {
+      out.push({ level: cur, ms: Math.round((s.t - start) * 1000) });
+      start = s.t;
+      cur = l;
+    }
+  }
+  return out;
+}
+
+function checkpoints(r: RunReport, device: string, key: string, want: [number, boolean, string][]): Criterion[] {
+  return want.map(([t, on, why]) => {
+    const got = at(r, t).devices[device]?.[key] === true;
+    return crit(`${device} ${on ? 'on' : 'off'} at ${t} s (${why})`, got === on, `${got ? 'on' : 'off'}`);
+  });
+}
+
+function angleCheckpoints(r: RunReport, servo: string, want: [number, number, number][]): Criterion[] {
+  return want.map(([t, deg, tol]) => {
+    const a = num(at(r, t).devices[servo]?.angle);
+    return crit(`${servo} at ${deg}° at ${t} s (±${tol}°)`, Math.abs(a - deg) <= tol, `${a.toFixed(1)}°`);
+  });
+}
+
+/** Every servo's V+ on a bench supply's + (not a board's 5 V), and no board rail over its USB fuse. */
+function servosOnSupply(p: Project, servos: string[]): Criterion {
+  const nets = new Netlist(p);
+  const bad = servos.filter((id) => {
+    const n = nets.netOf.get(`${id}.V+`);
+    return n === undefined || !nets.members[n].some((m) => p.devices.find((d) => d.id === m.split('.')[0])?.kind === 'psu' && m.endsWith('.+'));
+  });
+  return crit('servos powered from a bench supply', bad.length === 0, bad.length ? `not on a supply: ${bad.join(', ')}` : 'all on a supply');
+}
+
+function noStepperTrouble(r: RunReport): Criterion {
+  const warns = r.checks.filter((c) => c.level === 'warn' && /lost|µF|reversed|ignores|buzz/.test(c.msg));
+  return crit('no lost steps, driver wired as Pololu recommends', warns.length === 0, warns.map((w) => w.msg).join(' | ') || 'none');
+}
 
 /** Grade a submitted project: run it with the task's inputs, then the task's checks; a dirty bench fails. */
 export async function gradeTask(task: Task, submitted: unknown, firmware: Record<string, string>): Promise<Grade> {

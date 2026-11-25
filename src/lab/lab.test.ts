@@ -169,6 +169,12 @@ describe('wiring mistakes behave like the bench', () => {
     expect(ma).toBeGreaterThan(8); // (VOH − VF) / (220 Ω + source + LED) ≈ 11 mA
     expect(ma).toBeLessThan(14);
     expect(ok.snapshot().checks).toEqual([]);
+
+    // Blink holds each level for 500 ms: the LED follows within its 20 ms window, not at the next edge
+    ok.step(0.5); // t = 0.75 s, 250 ms into the first "off" half
+    expect(ok.snapshot().devices.led1.lit).toBe(false);
+    ok.step(0.5); // t = 1.25 s, on again
+    expect(ok.snapshot().devices.led1.lit).toBe(true);
   });
 
   it('an input wired to an open contact floats', () => {

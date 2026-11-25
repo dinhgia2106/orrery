@@ -127,18 +127,20 @@ The loop the server suggests: guide → template or new project → check → si
 
 `bench/` asks models to build things from a sentence and lets the simulator grade them. Each task is a description ("a potentiometer steers an SG90 from 0° to 180°", "lift a 250 g weight by 45° with an SG90 without passing 80 % of its stall torque"). The model works with the MCP tools above until it calls `submit`. The grader then runs the submitted bench itself, with inputs the model never sees (button presses, pot positions, serial lines), and measures what happened: LED states, servo and stepper angles, serial output, joint angles and actuator loads. A design passes only if the bench is also clean: no ignored wires, no error checks, no clashes, no overloads.
 
-| Task | What the grader measures |
-|---|---|
-| `blink-2hz` | L LED half periods 250 ± 15 ms |
-| `button-toggle-led` | LED state after each of three presses of a bouncing button; series resistor (over-current is an error) |
-| `pot-servo` | servo at both pot ends (≤ 5° / ≥ 175°, either direction) and at mid-travel (90 ± 5°) |
-| `serial-pong` | serial output is exactly `ready`, `pong`, `pong` for `ping`, `hello`, `ping` |
-| `stepper-one-rev` | final angle 360 ± 1.8°, stopped, driver still enabled, no lost steps, VMOT capacitor present |
-| `two-board-relay` | the board without the button toggles its L LED per press, over serial |
-| `arm-lift` | 100 × 10 × 10 mm PLA bar hinged at one end: horizontal, then ≥ 85° up, then horizontal again |
-| `heavy-lift` | 250 g at 90 ± 2 mm from the hinge raised 45 ± 3°, SG90 peak load < 80 % of stall |
+30 tasks; `npm run bench -- --list` names them all.
 
-Every task has a reference solution in `bench/solutions/`, and the tests check that each grader passes it and fails specific wrong answers (the 1 Hz Blink, an LED with no resistor, a missing TX→RX wire, a direct drive that overloads the servo, …).
+| Group | Tasks | What the graders measure |
+|---|---|---|
+| Timing and output | `blink-2hz`, `sos-morse`, `pwm-fade`, `traffic-light` | LED on/off durations to ±15–20 ms, a 2 s PWM fade cycle to ±0.1 s, the light sequence to ±0.1 s |
+| Inputs | `button-toggle-led`, `button-counter-serial`, `long-press`, `pot-servo`, `pot-threshold` | LED or serial state after presses of a bouncing button (short and held), servo angle at pot positions, a threshold with hysteresis |
+| Serial protocols | `serial-pong`, `serial-led-command`, `serial-servo-command`, `serial-adc-read` | exact replies to command lines, including wrong ones; the LED, servo angle (±2°) or ADC count (±4) they set or read |
+| Circuits | `led-from-psu`, `divider-adc` | LED current 10 ± 1 mA from a 9 V supply with no board; a ≥ 1 kΩ divider giving 2000 ± 50 mV on A0 |
+| Servos and power | `two-servos-mirror`, `servo-slow-sweep`, `six-servo-supply` | angles at pot positions (±5°), a 60°/s sweep (±8°), servos powered from a bench supply |
+| Steppers | `stepper-one-rev`, `stepper-pot-position`, `stepper-button-jog`, `stepper-microstep`, `stepper-speed` | shaft angle (±1.8°, ±0.3° in 1/16 steps), 360°/s ± 1 %, the driver wired as Pololu recommends, no lost steps |
+| Several boards | `two-board-relay`, `two-board-servo` | a button or pot on one board acting on the other over serial |
+| Mechanisms | `arm-lift`, `heavy-lift`, `gripper-close`, `pan-tilt`, `arm-two-joint-reach` | link poses from the assembly: a bar horizontal / vertical (±5°), 250 g lifted 45 ± 3° under 80 % of stall, fingertip pads ≤ 10 mm apart with no overlap, camera pan/tilt (±5°), an arm tip at a point (±5 mm) |
+
+Every task has a reference solution in `bench/solutions/`, and the tests check that each grader passes it and fails at least one specific wrong answer per task (the 1 Hz Blink, an LED with no resistor, servos on the Uno's 5 V pin, MS pins left open, a missing TX→RX wire, a direct drive that overloads the servo, an uncoupled second finger, …).
 
 ```bash
 npm run bench -- --list

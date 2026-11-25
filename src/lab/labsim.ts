@@ -240,6 +240,8 @@ export class LabSimulation {
         this.dirty = true;
       }
       if (this.dirty) this.resolve(t);
+      // close LED averaging windows while the pins hold still too, or a steady LED shows the previous level
+      else this.integrateLeds(t);
       if (this.mech && this.slice++ % 10 === 0) this.updateLoads(); // every 10 ms: a servo turns at most 6° in that time
       this.trackRails();
       left -= dt;
