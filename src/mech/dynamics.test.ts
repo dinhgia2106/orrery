@@ -87,6 +87,20 @@ describe('rigid-body dynamics (Rapier)', () => {
     expect(heavy.end).toBeLessThan(-5);
   });
 
+  it("reports how hard the servo works: holding the bar level takes its gravity torque, a share of the SG90's stall", async () => {
+    const lib = await loadRapier();
+    const a = pendulum({ driven: true });
+    const dyn = new Dynamics(lib, a, await massProperties(a), new Map([['hinge', 0]]));
+    for (let i = 0; i < 2 * 240; i++) dyn.step(1 / 240, () => 90);
+    const props = await massProperties(a);
+    const g = props.get('bar')!.massG; // at 50 mm from the hinge, pulling the bar down (towards negative angles)
+    const share = ((g / 1000) * 50) / 10 / 1.8; // kgf·cm over the 1.8 kgf·cm stall
+    const effort = dyn.actuatorEfforts().get('servo1')!;
+    expect(effort).toBeGreaterThan(share * 0.8);
+    expect(effort).toBeLessThan(share * 1.2);
+    dyn.dispose();
+  });
+
   it('a dropped ball comes to rest on the bench', async () => {
     const lib = await loadRapier();
     const a = pendulum();
@@ -110,6 +124,10 @@ describe('rigid-body dynamics (Rapier)', () => {
     expect(end).toBeGreaterThan(-50);
     expect(end).toBeLessThan(-20);
     expect(dyn.touching()).toEqual([{ a: 'bar', b: 'post' }]);
+    // pressing the bar into the post, the servo is at its stall torque (towards smaller angles): the contact force says so
+    const effort = dyn.actuatorEfforts().get('servo1')!;
+    expect(effort).toBeLessThan(-0.8);
+    expect(effort).toBeGreaterThan(-1.2);
     dyn.dispose();
   });
 

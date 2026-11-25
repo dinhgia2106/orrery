@@ -58,6 +58,20 @@ describe('templates run their real firmware against the wired circuit', () => {
     expect(sim.snapshot().checks.filter((c) => !c.msg.startsWith('5 V rail'))).toEqual([]);
   });
 
+  it("wires report their net: the servo's signal keeps switching, its supply sits at 5 V", () => {
+    const p = template('servo-sweep');
+    const sim = run(p, 'servo-sweep');
+    const sig = p.wires.find((w) => w.a === 'servo1.SIG' || w.b === 'servo1.SIG')!;
+    const pwr = p.wires.find((w) => w.a === 'servo1.V+' || w.b === 'servo1.V+')!;
+    sim.step(0.1);
+    const e0 = sim.netState(sig.a).edges;
+    sim.step(0.1);
+    // 50 Hz servo pulses: two edges per 20 ms period
+    expect(sim.netState(sig.a).edges - e0).toBeGreaterThanOrEqual(8);
+    expect(sim.netState(pwr.a).volts).toBeGreaterThan(4.5);
+    expect(sim.netState('nobody.X')).toEqual({ volts: 0, edges: 0 });
+  });
+
   it('stepper template turns half a revolution through the A4988', () => {
     const sim = run(template('stepper-a4988'), 'stepper-a4988');
     sim.step(0.35);

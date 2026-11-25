@@ -4,7 +4,7 @@ A mechanism for the Orrery lab, written as JSON, so a person can export it from 
 
 1. **What are the parts?** Rigid *links*, each with a shape, a material and how it is made (print, buy, cut, machine).
 2. **How do they move?** *Joints* that join links into a tree and say what drives each one: a servo or stepper on the bench, or another joint through a fixed ratio (tendons, gears, linkages).
-3. **What is built into it?** *Mounts* that place bench devices (servos, steppers, drivers, buttons…) on a link. Importing an assembly adds any missing device to the bench, ready to wire.
+3. **What is built into it?** *Mounts* that place bench devices (servos, steppers, drivers, buttons…) on a link — importing an assembly adds any missing device to the bench, ready to wire — and *tendons*, the lines those actuators pull.
 
 Plus *hardware* (screws, bearings, tendon line, springs) and *notes* (assumptions, assembly steps).
 
@@ -94,6 +94,27 @@ The SG90's tab screw-hole spacing is not in a drawing we could read, so the `sg9
 - **From a device** — `{"device": "servo1", "from": [0, 180], "to": [-90, 90]}`: the joint value is the device angle mapped linearly from `from` to `to` (defaults: `from` = `[0, 180]`, `to` = `from`). A servo's angle is its horn angle (0–180°); a stepper's is its shaft angle in degrees, unbounded. The device must appear in `mounts`.
 - **From another joint** — `{"follow": "index_mcp", "ratio": 0.75, "offset": 0}`: value = ratio × that joint + offset. Use it for tendons that curl several joints together, gear trains, parallel linkages.
 
+### Axles
+
+`"axle": {"size": "M2", "length": 20}` on a revolute joint is the screw it turns on: along the axis, centred on the joint origin, held by the parent. Orrery draws it with its head (ISO 4762) and nut (ISO 4032) and counts it as hardware; cut matching clearance holes (M2 2.4 mm, M3 3.4 mm) in both parts.
+
+## Tendons
+
+```json
+{"id": "index_mcp_flex", "label": "index knuckle flexor", "device": "servo1", "spool": 6.21, "wind": 1, "path": [{"link": "forearm", "at": [-31.15, 56.5, 23], "sheath": true}, {"link": "palm", "at": [-21.5, 50, 10]}, {"link": "palm", "at": [-21.5, 142, 10]}, {"link": "index_prox", "at": [-4.5, 19.5, 10]}]}
+```
+
+A line pulled by a printed spool on the shaft of a mounted servo or stepper, from the spool to an anchor.
+
+| Field | Meaning |
+|---|---|
+| `device` | The servo or stepper (in `mounts`) whose shaft carries the spool. The spool seats where the SG90 horn does; its two grooves are 1.5 and 4 mm above the seat (`wind` 1 and −1), so a flexor and an extensor can share a servo |
+| `spool` | Groove radius, mm: the line moves spool × device angle (radians) |
+| `wind` | `1`: the spool reels the line in as the device angle grows; `-1`: it pays it out |
+| `path` | Points from the spool to the anchor (the last point). `{"link", "at"}` is a guide fixed on a link (eyelet, channel end, sheath stop); `"sheath": true` makes the run to the next point a sheath (the line inside keeps its length, like a Bowden cable). `{"wrap": jointId, "r"}` is the round end of a revolute joint: the line wraps it (radius r about its axis) wherever the straight path would cut through it — the short way round, or always one way with `"sense": 1` or `-1` (right hand about the axis) |
+
+What Orrery does with it: draws the line (wound on the spool, in its sheaths, through its guides), measures its length every frame and reports **slack** (positive) or **stretch** (negative) against what the spool has reeled in, and its **tension** = the actuator's torque share ÷ spool radius (inextensible, frictionless line). Choose the spool radius so spool × device angle equals what the joints take up (moment arm × joint angle, summed over the joints the line crosses); the slack readout shows what is left. Joints still move by their `drive`: tendons do not add constraints.
+
 ## Mounts
 
 ```json
@@ -111,7 +132,7 @@ Places a bench device on a link; Orrery draws its real model there (SG90, NEMA 1
 - **Checks**: invalid files are rejected with one message per problem; joints whose drive asks for more than their limits are reported as sitting on a stop.
 - **BOM**: printed / cut / machined links with material and bounding size, and the hardware list, next to the electronics.
 
-It is **kinematics only**: no masses, forces, torques, friction or collisions are simulated. Do not put torque or speed claims in an assembly that were not calculated; put assumptions in `notes`.
+Masses, gravity loads, collisions, tendon slack and tension and (with *Dynamics*) rigid-body motion are simulated from the geometry — see the README. Do not put torque or speed claims in an assembly that were not calculated; put assumptions in `notes`.
 
 ## Writing one with an AI
 
@@ -121,8 +142,9 @@ In the lab, *Mechanism → Ask an AI* builds a prompt with these rules, a small 
 
 `examples/robot-hand/robot-hand.assembly.json` — 17 links, 16 joints, 6 mounted servos:
 
-- **Links**: forearm shell (translucent, holds the servos), wrist disc, palm, three phalanges per finger, two for the thumb — all printed PLA.
-- **Joints**: wrist rotation (servo 6); for each finger a knuckle driven by its servo, the middle joint following the knuckle (ratio 1) and the tip following the middle (ratio 0.75) — the tendon pulling through all three; thumb knuckle and tip the same way.
+- **Links**: forearm shell (translucent, five SG90 pockets and sheath stops, the wrist servo inside), wrist disc on the wrist servo's horn, palm with hinge tabs, three phalanges per finger, two for the thumb — all printed PLA, with clevis forks and tongues and line eyelets as features.
+- **Joints**: wrist rotation (servo 6, direct on its horn); for each finger a knuckle driven by its servo, the middle joint following the knuckle (ratio 1) and the tip following the middle (ratio 0.75); thumb knuckle and tip the same way. Every finger hinge turns on an M2 `axle`.
 - **Mounts**: six SG90s in the forearm.
-- **Hardware**: tendon line, PTFE sheaths, return elastics, hinge pins, servo screws, a 608 bearing for the wrist.
+- **Tendons**: per finger a flexor on the palm side through all three joints and an extensor over their backs, both on one two-groove spool, through PTFE sheaths into the palm.
+- **Hardware**: tendon line, PTFE tube, M2 hinge screws and nuts, servo screws, a 608 bearing for the wrist.
 - **Bench** (template *Five-finger robot hand*): the six servos on a 5 V bench supply with its ground tied to the Uno's, a pot on A0 for grip, a button on D2 for the wrist.

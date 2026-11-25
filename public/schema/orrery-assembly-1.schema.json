@@ -54,6 +54,12 @@
         "$ref": "#/$defs/mount"
       }
     },
+    "tendons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tendon"
+      }
+    },
     "hardware": {
       "type": "array",
       "description": "Fasteners, bearings, tendon line, springs: generic items, no invented part numbers.",
@@ -386,6 +392,29 @@
               }
             }
           ]
+        },
+        "axle": {
+          "type": "object",
+          "required": [
+            "size",
+            "length"
+          ],
+          "additionalProperties": false,
+          "description": "The screw or pin the joint turns on, along its axis, centred on the joint origin",
+          "properties": {
+            "size": {
+              "enum": [
+                "M2",
+                "M3"
+              ]
+            },
+            "length": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "description": "Shank length, mm"
+            }
+          }
         }
       }
     },
@@ -564,6 +593,98 @@
           }
         }
       ]
+    },
+    "tendon": {
+      "type": "object",
+      "required": [
+        "id",
+        "device",
+        "spool",
+        "wind",
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "device": {
+          "$ref": "#/$defs/id",
+          "description": "A servo or stepper listed in mounts; its shaft carries the spool"
+        },
+        "spool": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "description": "Spool radius, mm"
+        },
+        "wind": {
+          "enum": [
+            1,
+            -1
+          ],
+          "description": "1: reeled in as the device angle increases; -1: paid out"
+        },
+        "path": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "description": "From the spool to the anchor (the last point)",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "link",
+                  "at"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "link": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "at": {
+                    "$ref": "#/$defs/vec3",
+                    "description": "Point in the link frame, mm"
+                  },
+                  "sheath": {
+                    "type": "boolean",
+                    "description": "The line runs inside a sheath from here to the next point"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "wrap",
+                  "r"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "wrap": {
+                    "$ref": "#/$defs/id",
+                    "description": "A revolute joint whose round end the line wraps"
+                  },
+                  "r": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "sense": {
+                    "enum": [
+                      1,
+                      -1
+                    ],
+                    "description": "Wrap this way round (right hand about the joint axis) instead of the short way"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
   "version": 1,
   "units": "mm",
   "name": "Dexterous hand, 17 DOF",
-  "description": "Tendon-driven hand with 17 degrees of freedom: wrist rotation and pitch; per finger spread, knuckle flex and middle flex with the tip following the middle joint; thumb opposition, base flex and middle flex. Fifteen SG90s sit in a printed servo bed, two more drive the wrist.",
+  "description": "Tendon-driven hand with 17 degrees of freedom: wrist rotation and pitch; per finger spread, knuckle flex and middle flex with the tip following the middle joint; thumb opposition, base flex and middle flex. Fifteen SG90s in a printed bed reel flexor and extensor lines through PTFE sheaths; two more drive the wrist directly.",
   "placement": [
     170,
     0,
@@ -89,7 +89,7 @@
     },
     {
       "id": "forearm",
-      "label": "servo bed: 15 SG90 pockets",
+      "label": "servo bed: 15 SG90 pockets, sheath stops",
       "shape": {
         "box": [
           124,
@@ -120,6 +120,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              -31.15,
+              55,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -31.15,
+              55,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -31.15,
+              55,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -135,6 +173,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              6.85,
+              55,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              6.85,
+              55,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              6.85,
+              55,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -150,6 +226,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              44.85,
+              55,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              44.85,
+              55,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              44.85,
+              55,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -165,6 +279,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              -27.95,
+              87,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -27.95,
+              87,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -27.95,
+              87,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -180,6 +332,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              10.05,
+              87,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              10.05,
+              87,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              10.05,
+              87,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -192,6 +382,44 @@
               0,
               0
             ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              48.05,
+              87,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              48.05,
+              87,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              48.05,
+              87,
+              26.5
+            ],
+            "axis": "y"
           }
         },
         {
@@ -210,6 +438,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              -24.75,
+              119,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -24.75,
+              119,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -24.75,
+              119,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -225,6 +491,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              13.25,
+              119,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              13.25,
+              119,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              13.25,
+              119,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -237,6 +541,44 @@
               0,
               0
             ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              51.25,
+              119,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              51.25,
+              119,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              51.25,
+              119,
+              26.5
+            ],
+            "axis": "y"
           }
         },
         {
@@ -255,6 +597,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              -21.55,
+              151,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -21.55,
+              151,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -21.55,
+              151,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -270,6 +650,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              16.45,
+              151,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              16.45,
+              151,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              16.45,
+              151,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -282,6 +700,44 @@
               0,
               0
             ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              54.45,
+              151,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              54.45,
+              151,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              54.45,
+              151,
+              26.5
+            ],
+            "axis": "y"
           }
         },
         {
@@ -300,6 +756,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              -18.35,
+              183,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -18.35,
+              183,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -18.35,
+              183,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -315,6 +809,44 @@
           }
         },
         {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              19.65,
+              183,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              19.65,
+              183,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              19.65,
+              183,
+              26.5
+            ],
+            "axis": "y"
+          }
+        },
+        {
           "pocket": {
             "for": "sg90",
             "position": [
@@ -327,6 +859,44 @@
               0,
               0
             ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "box": [
+                3,
+                3,
+                27
+              ]
+            },
+            "position": [
+              57.65,
+              183,
+              15.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              57.65,
+              183,
+              23
+            ],
+            "axis": "y"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              57.65,
+              183,
+              26.5
+            ],
+            "axis": "y"
           }
         }
       ],
@@ -407,7 +977,7 @@
     },
     {
       "id": "palm",
-      "label": "palm with tendon channels",
+      "label": "palm: knuckle slots and pins, tendon channels",
       "shape": {
         "box": [
           96,
@@ -439,42 +1009,342 @@
           }
         },
         {
-          "hole": {
-            "d": 2.2,
+          "cut": {
+            "box": [
+              15,
+              10,
+              8.6
+            ],
             "position": [
               -17,
-              96,
-              6
+              139,
+              0
             ]
           }
         },
         {
           "hole": {
-            "d": 2.2,
+            "d": 2.4,
+            "position": [
+              -17,
+              140,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -21.5,
+              96,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -21.5,
+              96,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -15,
+              96,
+              1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -15,
+              96,
+              -1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -22,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              -12,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              15,
+              10,
+              8.6
+            ],
             "position": [
               5,
-              96,
-              6
+              139,
+              0
             ]
           }
         },
         {
           "hole": {
-            "d": 2.2,
+            "d": 2.4,
+            "position": [
+              5,
+              140,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0.5,
+              96,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0.5,
+              96,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              7,
+              96,
+              1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              7,
+              96,
+              -1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              0,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              10,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              15,
+              10,
+              8.6
+            ],
             "position": [
               27,
-              96,
-              6
+              139,
+              0
             ]
           }
         },
         {
           "hole": {
-            "d": 2.2,
+            "d": 2.4,
+            "position": [
+              27,
+              140,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              22.5,
+              96,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              22.5,
+              96,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              29,
+              96,
+              1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              29,
+              96,
+              -1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              22,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              32,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              15,
+              10,
+              8.6
+            ],
             "position": [
               49,
+              139,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              49,
+              140,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              44.5,
               96,
-              6
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              44.5,
+              96,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              51,
+              96,
+              1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              51,
+              96,
+              -1.6
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              44,
+              96,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              54,
+              96,
+              0
             ]
           }
         }
@@ -484,20 +1354,57 @@
     },
     {
       "id": "index_knuckle",
-      "label": "index knuckle barrel",
+      "label": "index knuckle: spread tongue and flex barrel",
       "shape": {
-        "cylinder": {
-          "r": 6,
-          "h": 14
-        }
+        "box": [
+          12,
+          7,
+          8
+        ]
       },
-      "rotation": [
+      "position": [
         0,
-        0,
-        90
+        -0.5,
+        0
       ],
       "color": "#d9dee6",
       "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                8,
+                8.5,
+                8
+              ]
+            },
+            "position": [
+              0,
+              7.25,
+              0
+            ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 5,
+                "h": 8
+              }
+            },
+            "position": [
+              0,
+              11.5,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              90
+            ]
+          }
+        },
         {
           "hole": {
             "d": 2.4,
@@ -506,7 +1413,62 @@
               0,
               0
             ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              11.5,
+              0
+            ],
             "axis": "x"
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              2,
+              6,
+              1.6
+            ],
+            "depth": 16
+          }
+        },
+        {
+          "hole": {
+            "d": 1.6,
+            "position": [
+              2,
+              6,
+              -1.6
+            ],
+            "depth": 16
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -5,
+              -3,
+              0
+            ],
+            "depth": 4
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              5,
+              -3,
+              0
+            ],
+            "depth": 4
           }
         }
       ],
@@ -519,7 +1481,7 @@
       "shape": {
         "capsule": {
           "r": 9,
-          "h": 24
+          "h": 42
         }
       },
       "position": [
@@ -530,23 +1492,16 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              7.2,
-              0
+          "cut": {
+            "box": [
+              8.6,
+              15.3,
+              20
             ],
-            "axis": "x"
-          }
-        },
-        {
-          "hole": {
-            "d": 1.6,
             "position": [
               0,
-              21.0,
-              4.05
+              -2.35,
+              0
             ]
           }
         },
@@ -555,10 +1510,139 @@
             "d": 2.4,
             "position": [
               0,
-              34.8,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              18.8,
+              20
+            ],
+            "position": [
+              0,
+              42.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              42,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              32.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              32.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              32.5,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              32.5,
+              -10
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -571,7 +1655,7 @@
       "shape": {
         "capsule": {
           "r": 8.5,
-          "h": 9.0
+          "h": 26
         }
       },
       "position": [
@@ -582,23 +1666,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              6.8,
-              0
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
             ],
-            "axis": "x"
+            "position": [
+              -6.35,
+              -0.1,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
+            ],
             "position": [
-              0,
-              13.0,
-              3.83
+              6.35,
+              -0.1,
+              0
             ]
           }
         },
@@ -607,10 +1698,113 @@
             "d": 2.4,
             "position": [
               0,
-              19.2,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              17.8,
+              19.0
+            ],
+            "position": [
+              0,
+              26.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              26,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              16.5,
+              9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              16.5,
+              9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              16.5,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              16.5,
+              -9.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -623,22 +1817,181 @@
       "shape": {
         "capsule": {
           "r": 8,
-          "h": 4
+          "h": 12
         }
       },
       "position": [
         0,
-        10.0,
+        6.0,
         0
       ],
       "color": "#f6f7f9",
       "features": [
         {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              -6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
               0,
-              6.4,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              13,
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              13,
+              9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ],
+            "depth": 3.2
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "middle_knuckle",
+      "label": "middle knuckle: spread tongue and flex barrel",
+      "shape": {
+        "box": [
+          12,
+          7,
+          8
+        ]
+      },
+      "position": [
+        0,
+        -0.5,
+        0
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                8,
+                8.5,
+                8
+              ]
+            },
+            "position": [
+              0,
+              7.25,
+              0
+            ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 5,
+                "h": 8
+              }
+            },
+            "position": [
+              0,
+              11.5,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              90
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              11.5,
               0
             ],
             "axis": "x"
@@ -648,41 +2001,44 @@
           "hole": {
             "d": 1.6,
             "position": [
-              0,
-              10.0,
-              3.6
-            ]
+              2,
+              6,
+              1.6
+            ],
+            "depth": 16
           }
-        }
-      ],
-      "material": "PLA",
-      "make": "print"
-    },
-    {
-      "id": "middle_knuckle",
-      "label": "middle knuckle barrel",
-      "shape": {
-        "cylinder": {
-          "r": 6,
-          "h": 14
-        }
-      },
-      "rotation": [
-        0,
-        0,
-        90
-      ],
-      "color": "#d9dee6",
-      "features": [
+        },
         {
           "hole": {
-            "d": 2.4,
+            "d": 1.6,
             "position": [
-              0,
-              0,
+              2,
+              6,
+              -1.6
+            ],
+            "depth": 16
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -5,
+              -3,
               0
             ],
-            "axis": "x"
+            "depth": 4
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              5,
+              -3,
+              0
+            ],
+            "depth": 4
           }
         }
       ],
@@ -695,7 +2051,7 @@
       "shape": {
         "capsule": {
           "r": 9,
-          "h": 28
+          "h": 46
         }
       },
       "position": [
@@ -706,23 +2062,16 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              7.2,
-              0
+          "cut": {
+            "box": [
+              8.6,
+              15.3,
+              20
             ],
-            "axis": "x"
-          }
-        },
-        {
-          "hole": {
-            "d": 1.6,
             "position": [
               0,
-              23.0,
-              4.05
+              -2.35,
+              0
             ]
           }
         },
@@ -731,10 +2080,139 @@
             "d": 2.4,
             "position": [
               0,
-              38.8,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              18.8,
+              20
+            ],
+            "position": [
+              0,
+              46.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              46,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              36.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              36.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              36.5,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              36.5,
+              -10
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -747,7 +2225,7 @@
       "shape": {
         "capsule": {
           "r": 8.5,
-          "h": 13.0
+          "h": 30
         }
       },
       "position": [
@@ -758,23 +2236,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              6.8,
-              0
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
             ],
-            "axis": "x"
+            "position": [
+              -6.35,
+              -0.1,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
+            ],
             "position": [
-              0,
-              15.0,
-              3.83
+              6.35,
+              -0.1,
+              0
             ]
           }
         },
@@ -783,10 +2268,113 @@
             "d": 2.4,
             "position": [
               0,
-              23.2,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              17.8,
+              19.0
+            ],
+            "position": [
+              0,
+              30.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              30,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              20.5,
+              9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              20.5,
+              9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              20.5,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              20.5,
+              -9.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -799,22 +2387,181 @@
       "shape": {
         "capsule": {
           "r": 8,
-          "h": 5
+          "h": 13
         }
       },
       "position": [
         0,
-        10.5,
+        6.5,
         0
       ],
       "color": "#f6f7f9",
       "features": [
         {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              -6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
               0,
-              6.4,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              14,
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              14,
+              9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ],
+            "depth": 3.2
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "ring_knuckle",
+      "label": "ring knuckle: spread tongue and flex barrel",
+      "shape": {
+        "box": [
+          12,
+          7,
+          8
+        ]
+      },
+      "position": [
+        0,
+        -0.5,
+        0
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                8,
+                8.5,
+                8
+              ]
+            },
+            "position": [
+              0,
+              7.25,
+              0
+            ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 5,
+                "h": 8
+              }
+            },
+            "position": [
+              0,
+              11.5,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              90
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              11.5,
               0
             ],
             "axis": "x"
@@ -824,41 +2571,44 @@
           "hole": {
             "d": 1.6,
             "position": [
-              0,
-              10.5,
-              3.6
-            ]
+              2,
+              6,
+              1.6
+            ],
+            "depth": 16
           }
-        }
-      ],
-      "material": "PLA",
-      "make": "print"
-    },
-    {
-      "id": "ring_knuckle",
-      "label": "ring knuckle barrel",
-      "shape": {
-        "cylinder": {
-          "r": 6,
-          "h": 14
-        }
-      },
-      "rotation": [
-        0,
-        0,
-        90
-      ],
-      "color": "#d9dee6",
-      "features": [
+        },
         {
           "hole": {
-            "d": 2.4,
+            "d": 1.6,
             "position": [
-              0,
-              0,
+              2,
+              6,
+              -1.6
+            ],
+            "depth": 16
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -5,
+              -3,
               0
             ],
-            "axis": "x"
+            "depth": 4
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              5,
+              -3,
+              0
+            ],
+            "depth": 4
           }
         }
       ],
@@ -871,7 +2621,7 @@
       "shape": {
         "capsule": {
           "r": 9,
-          "h": 25
+          "h": 43
         }
       },
       "position": [
@@ -882,23 +2632,16 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              7.2,
-              0
+          "cut": {
+            "box": [
+              8.6,
+              15.3,
+              20
             ],
-            "axis": "x"
-          }
-        },
-        {
-          "hole": {
-            "d": 1.6,
             "position": [
               0,
-              21.5,
-              4.05
+              -2.35,
+              0
             ]
           }
         },
@@ -907,10 +2650,139 @@
             "d": 2.4,
             "position": [
               0,
-              35.8,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              18.8,
+              20
+            ],
+            "position": [
+              0,
+              43.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              43,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              9.8,
+              -10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              33.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              33.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              33.5,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              33.5,
+              -10
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -923,7 +2795,7 @@
       "shape": {
         "capsule": {
           "r": 8.5,
-          "h": 11.0
+          "h": 28
         }
       },
       "position": [
@@ -934,23 +2806,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              6.8,
-              0
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
             ],
-            "axis": "x"
+            "position": [
+              -6.35,
+              -0.1,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
+            ],
             "position": [
-              0,
-              14.0,
-              3.83
+              6.35,
+              -0.1,
+              0
             ]
           }
         },
@@ -959,10 +2838,113 @@
             "d": 2.4,
             "position": [
               0,
-              21.2,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              17.8,
+              19.0
+            ],
+            "position": [
+              0,
+              28.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              28,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              18.5,
+              9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              18.5,
+              9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              18.5,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              18.5,
+              -9.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -975,22 +2957,181 @@
       "shape": {
         "capsule": {
           "r": 8,
-          "h": 4
+          "h": 12
         }
       },
       "position": [
         0,
-        10.0,
+        6.0,
         0
       ],
       "color": "#f6f7f9",
       "features": [
         {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              -6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              5.8,
+              17.8,
+              18
+            ],
+            "position": [
+              6.1,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
               0,
-              6.4,
+              0,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              13,
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              13,
+              9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -9
+            ],
+            "depth": 3.2
+          }
+        }
+      ],
+      "material": "PLA",
+      "make": "print"
+    },
+    {
+      "id": "little_knuckle",
+      "label": "little knuckle: spread tongue and flex barrel",
+      "shape": {
+        "box": [
+          12,
+          7,
+          8
+        ]
+      },
+      "position": [
+        0,
+        -0.5,
+        0
+      ],
+      "color": "#d9dee6",
+      "features": [
+        {
+          "add": {
+            "shape": {
+              "box": [
+                8,
+                8.5,
+                8
+              ]
+            },
+            "position": [
+              0,
+              7.25,
+              0
+            ]
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 5,
+                "h": 8
+              }
+            },
+            "position": [
+              0,
+              11.5,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              90
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "axis": "z"
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              11.5,
               0
             ],
             "axis": "x"
@@ -1000,41 +3141,44 @@
           "hole": {
             "d": 1.6,
             "position": [
-              0,
-              10.0,
-              3.6
-            ]
+              2,
+              6,
+              1.6
+            ],
+            "depth": 16
           }
-        }
-      ],
-      "material": "PLA",
-      "make": "print"
-    },
-    {
-      "id": "little_knuckle",
-      "label": "little knuckle barrel",
-      "shape": {
-        "cylinder": {
-          "r": 6,
-          "h": 14
-        }
-      },
-      "rotation": [
-        0,
-        0,
-        90
-      ],
-      "color": "#d9dee6",
-      "features": [
+        },
         {
           "hole": {
-            "d": 2.4,
+            "d": 1.6,
             "position": [
-              0,
-              0,
+              2,
+              6,
+              -1.6
+            ],
+            "depth": 16
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -5,
+              -3,
               0
             ],
-            "axis": "x"
+            "depth": 4
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              5,
+              -3,
+              0
+            ],
+            "depth": 4
           }
         }
       ],
@@ -1047,7 +3191,7 @@
       "shape": {
         "capsule": {
           "r": 8,
-          "h": 19
+          "h": 35
         }
       },
       "position": [
@@ -1058,23 +3202,16 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              6.4,
-              0
+          "cut": {
+            "box": [
+              8.6,
+              14.3,
+              18
             ],
-            "axis": "x"
-          }
-        },
-        {
-          "hole": {
-            "d": 1.6,
             "position": [
               0,
-              17.5,
-              3.6
+              -1.85,
+              0
             ]
           }
         },
@@ -1083,10 +3220,139 @@
             "d": 2.4,
             "position": [
               0,
-              28.6,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              16.8,
+              18
+            ],
+            "position": [
+              0,
+              35.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              35,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              9.8,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              9.8,
+              -9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              25.5,
+              9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              25.5,
+              9
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              25.5,
+              -9
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              25.5,
+              -9
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1099,7 +3365,7 @@
       "shape": {
         "capsule": {
           "r": 7.5,
-          "h": 7.0
+          "h": 22
         }
       },
       "position": [
@@ -1110,23 +3376,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              6.0,
-              0
+          "cut": {
+            "box": [
+              5.3,
+              16.8,
+              17.0
             ],
-            "axis": "x"
+            "position": [
+              -5.85,
+              -0.1,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              5.3,
+              16.8,
+              17.0
+            ],
             "position": [
-              0,
-              11.0,
-              3.38
+              5.85,
+              -0.1,
+              0
             ]
           }
         },
@@ -1135,10 +3408,113 @@
             "d": 2.4,
             "position": [
               0,
-              16.0,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              15.8,
+              17.0
+            ],
+            "position": [
+              0,
+              22.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              22,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -8.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -8.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              12.5,
+              8.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              12.5,
+              8.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              12.5,
+              -8.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              12.5,
+              -8.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1151,35 +3527,105 @@
       "shape": {
         "capsule": {
           "r": 7,
-          "h": 4
+          "h": 11
         }
       },
       "position": [
         0,
-        9.0,
+        5.5,
         0
       ],
       "color": "#f6f7f9",
       "features": [
         {
+          "cut": {
+            "box": [
+              4.8,
+              15.8,
+              16
+            ],
+            "position": [
+              -5.6,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              4.8,
+              15.8,
+              16
+            ],
+            "position": [
+              5.6,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
               0,
-              5.6,
+              0,
               0
             ],
             "axis": "x"
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
             "position": [
-              0,
-              9.0,
-              3.15
+              4.5,
+              11,
+              8
             ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              11,
+              8
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              9.8,
+              -8
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              9.8,
+              -8
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1188,7 +3634,7 @@
     },
     {
       "id": "thumb_base",
-      "label": "thumb base (opposition)",
+      "label": "thumb base: opposition pulley and flex fork",
       "shape": {
         "cylinder": {
           "r": 9,
@@ -1203,6 +3649,51 @@
       "color": "#d9dee6",
       "features": [
         {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 9,
+                "h": 18
+              }
+            },
+            "position": [
+              0,
+              14,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              90
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "depth": 10
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              19.8,
+              20
+            ],
+            "position": [
+              0,
+              14.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
@@ -1211,6 +3702,110 @@
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -9.5,
+              3,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -9.5,
+              3,
+              0
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -9.5,
+              9,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -9.5,
+              9,
+              0
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              4.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              4.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              4.5,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              4.5,
+              -10
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1223,7 +3818,7 @@
       "shape": {
         "capsule": {
           "r": 9.5,
-          "h": 15.0
+          "h": 34
         }
       },
       "position": [
@@ -1234,23 +3829,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              7.6,
-              0
+          "cut": {
+            "box": [
+              7.3,
+              19.8,
+              21.0
             ],
-            "axis": "x"
+            "position": [
+              -6.85,
+              -0.6,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              7.3,
+              19.8,
+              21.0
+            ],
             "position": [
-              0,
-              17.0,
-              4.28
+              6.85,
+              -0.6,
+              0
             ]
           }
         },
@@ -1259,10 +3861,139 @@
             "d": 2.4,
             "position": [
               0,
-              26.4,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              19.8,
+              21.0
+            ],
+            "position": [
+              0,
+              34.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              34,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              10.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              10.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              24.5,
+              10.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              24.5,
+              10.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              -4.5,
+              19.5,
+              -10.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              -4.5,
+              19.5,
+              -10.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              24.5,
+              -10.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              24.5,
+              -10.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1275,7 +4006,7 @@
       "shape": {
         "capsule": {
           "r": 9,
-          "h": 10
+          "h": 28
         }
       },
       "position": [
@@ -1286,23 +4017,30 @@
       "color": "#f6f7f9",
       "features": [
         {
-          "hole": {
-            "d": 2.4,
-            "position": [
-              0,
-              7.2,
-              0
+          "cut": {
+            "box": [
+              6.8,
+              19.8,
+              20
             ],
-            "axis": "x"
+            "position": [
+              -6.6,
+              -0.1,
+              0
+            ]
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "cut": {
+            "box": [
+              6.8,
+              19.8,
+              20
+            ],
             "position": [
-              0,
-              14.0,
-              4.05
+              6.6,
+              -0.1,
+              0
             ]
           }
         },
@@ -1311,10 +4049,87 @@
             "d": 2.4,
             "position": [
               0,
-              20.8,
+              0,
               0
             ],
             "axis": "x"
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              7.0,
+              18.8,
+              20
+            ],
+            "position": [
+              0,
+              28.6,
+              0
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 2.4,
+            "position": [
+              0,
+              28,
+              0
+            ],
+            "axis": "x"
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              18.5,
+              10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              18.5,
+              10
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              18.5,
+              -10
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              18.5,
+              -10
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1327,35 +4142,105 @@
       "shape": {
         "capsule": {
           "r": 8.5,
-          "h": 7.0
+          "h": 15.5
         }
       },
       "position": [
         0,
-        12.0,
+        7.75,
         0
       ],
       "color": "#f6f7f9",
       "features": [
         {
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
+            ],
+            "position": [
+              -6.35,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
+          "cut": {
+            "box": [
+              6.3,
+              18.8,
+              19.0
+            ],
+            "position": [
+              6.35,
+              -0.1,
+              0
+            ]
+          }
+        },
+        {
           "hole": {
             "d": 2.4,
             "position": [
               0,
-              6.8,
+              0,
               0
             ],
             "axis": "x"
           }
         },
         {
-          "hole": {
-            "d": 1.6,
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
             "position": [
-              0,
-              12.0,
-              3.83
+              4.5,
+              17,
+              9.5
             ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              17,
+              9.5
+            ],
+            "depth": 3.2
+          }
+        },
+        {
+          "add": {
+            "shape": {
+              "cylinder": {
+                "r": 1.4,
+                "h": 3
+              }
+            },
+            "position": [
+              4.5,
+              17,
+              -9.5
+            ]
+          }
+        },
+        {
+          "hole": {
+            "d": 1.0,
+            "position": [
+              4.5,
+              17,
+              -9.5
+            ],
+            "depth": 3.2
           }
         }
       ],
@@ -1455,7 +4340,7 @@
       "child": "index_knuckle",
       "position": [
         -17,
-        146,
+        140,
         0
       ],
       "axis": [
@@ -1470,13 +4355,17 @@
       "drive": {
         "device": "servo12",
         "from": [
-          0,
-          180
+          75,
+          105
         ],
         "to": [
           -15,
           15
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 24
       }
     },
     {
@@ -1486,7 +4375,7 @@
       "child": "index_prox",
       "position": [
         0,
-        0,
+        11.5,
         0
       ],
       "axis": [
@@ -1508,6 +4397,10 @@
           0,
           90
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1539,6 +4432,10 @@
           0,
           100
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1563,6 +4460,10 @@
       "drive": {
         "follow": "index_pip",
         "ratio": 0.7
+      },
+      "axle": {
+        "size": "M2",
+        "length": 19.0
       }
     },
     {
@@ -1572,7 +4473,7 @@
       "child": "middle_knuckle",
       "position": [
         5,
-        146,
+        140,
         0
       ],
       "axis": [
@@ -1587,13 +4488,17 @@
       "drive": {
         "device": "servo13",
         "from": [
-          0,
-          180
+          80,
+          100
         ],
         "to": [
           -10,
           10
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 24
       }
     },
     {
@@ -1603,7 +4508,7 @@
       "child": "middle_prox",
       "position": [
         0,
-        0,
+        11.5,
         0
       ],
       "axis": [
@@ -1625,6 +4530,10 @@
           0,
           90
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1656,6 +4565,10 @@
           0,
           100
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1680,6 +4593,10 @@
       "drive": {
         "follow": "middle_pip",
         "ratio": 0.7
+      },
+      "axle": {
+        "size": "M2",
+        "length": 19.0
       }
     },
     {
@@ -1689,7 +4606,7 @@
       "child": "ring_knuckle",
       "position": [
         27,
-        146,
+        140,
         0
       ],
       "axis": [
@@ -1704,13 +4621,17 @@
       "drive": {
         "device": "servo14",
         "from": [
-          0,
-          180
+          80,
+          100
         ],
         "to": [
           -10,
           10
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 24
       }
     },
     {
@@ -1720,7 +4641,7 @@
       "child": "ring_prox",
       "position": [
         0,
-        0,
+        11.5,
         0
       ],
       "axis": [
@@ -1742,6 +4663,10 @@
           0,
           90
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1773,6 +4698,10 @@
           0,
           100
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1797,6 +4726,10 @@
       "drive": {
         "follow": "ring_pip",
         "ratio": 0.7
+      },
+      "axle": {
+        "size": "M2",
+        "length": 19.0
       }
     },
     {
@@ -1806,7 +4739,7 @@
       "child": "little_knuckle",
       "position": [
         49,
-        146,
+        140,
         0
       ],
       "axis": [
@@ -1821,13 +4754,17 @@
       "drive": {
         "device": "servo15",
         "from": [
-          0,
-          180
+          75,
+          105
         ],
         "to": [
           -15,
           15
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 24
       }
     },
     {
@@ -1837,7 +4774,7 @@
       "child": "little_prox",
       "position": [
         0,
-        0,
+        11.5,
         0
       ],
       "axis": [
@@ -1859,6 +4796,10 @@
           0,
           90
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 18
       }
     },
     {
@@ -1890,6 +4831,10 @@
           0,
           100
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 18
       }
     },
     {
@@ -1914,6 +4859,10 @@
       "drive": {
         "follow": "little_pip",
         "ratio": 0.7
+      },
+      "axle": {
+        "size": "M2",
+        "length": 17.0
       }
     },
     {
@@ -1950,6 +4899,10 @@
           0,
           90
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -1975,12 +4928,16 @@
         "device": "servo10",
         "from": [
           0,
-          180
+          120
         ],
         "to": [
           0,
           60
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     },
     {
@@ -2012,6 +4969,10 @@
           0,
           70
         ]
+      },
+      "axle": {
+        "size": "M2",
+        "length": 21
       }
     },
     {
@@ -2036,6 +4997,10 @@
       "drive": {
         "follow": "thumb_mcp",
         "ratio": 0.9
+      },
+      "axle": {
+        "size": "M2",
+        "length": 20
       }
     }
   ],
@@ -2291,11 +5256,1726 @@
       ]
     }
   ],
+  "tendons": [
+    {
+      "id": "index_mcp_flex",
+      "label": "index knuckle flexor",
+      "device": "servo1",
+      "spool": 6.21,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -31.15,
+            56.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -21.5,
+            50,
+            10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -21.5,
+            142,
+            10
+          ]
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            -4.5,
+            19.5,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "index_pip_flex",
+      "label": "index middle-joint flexor (curls the tip too)",
+      "device": "servo2",
+      "spool": 11.23,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            6.85,
+            56.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -15,
+            50,
+            1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -15,
+            128,
+            1.6
+          ]
+        },
+        {
+          "link": "index_knuckle",
+          "at": [
+            2,
+            11.5,
+            1.6
+          ]
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            2,
+            5.5,
+            1.6
+          ]
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            4.5,
+            32.5,
+            10
+          ]
+        },
+        {
+          "link": "index_mid",
+          "at": [
+            4.5,
+            16.5,
+            9.5
+          ]
+        },
+        {
+          "link": "index_dist",
+          "at": [
+            4.5,
+            13,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "index_mcp_exte",
+      "label": "index knuckle extensor",
+      "device": "servo1",
+      "spool": 4.76,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -31.15,
+            56.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -21.5,
+            50,
+            -10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -21.5,
+            142,
+            -10
+          ]
+        },
+        {
+          "wrap": "index_mcp",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            -4.5,
+            9.8,
+            -10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "index_pip_exte",
+      "label": "index middle-joint extensor (curls the tip too)",
+      "device": "servo2",
+      "spool": 8.77,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            6.85,
+            56.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -15,
+            50,
+            -1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -15,
+            128,
+            -1.6
+          ]
+        },
+        {
+          "link": "index_knuckle",
+          "at": [
+            2,
+            11.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            2,
+            5.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "index_prox",
+          "at": [
+            4.5,
+            32.5,
+            -10
+          ]
+        },
+        {
+          "wrap": "index_pip",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "index_mid",
+          "at": [
+            4.5,
+            9.8,
+            -9.5
+          ]
+        },
+        {
+          "link": "index_mid",
+          "at": [
+            4.5,
+            16.5,
+            -9.5
+          ]
+        },
+        {
+          "wrap": "index_dip",
+          "r": 9.0,
+          "sense": 1
+        },
+        {
+          "link": "index_dist",
+          "at": [
+            4.5,
+            9.8,
+            -9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "index_abd_a",
+      "label": "index spread, -X side",
+      "device": "servo12",
+      "spool": 4.93,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            54.45,
+            152.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -22,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -22,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "index_knuckle",
+          "at": [
+            -5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "index_abd_b",
+      "label": "index spread, +X side",
+      "device": "servo12",
+      "spool": 4.93,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            54.45,
+            152.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -12,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -12,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "index_knuckle",
+          "at": [
+            5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_mcp_flex",
+      "label": "middle knuckle flexor",
+      "device": "servo3",
+      "spool": 6.21,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            44.85,
+            56.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            0.5,
+            50,
+            10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            0.5,
+            142,
+            10
+          ]
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            -4.5,
+            19.5,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_pip_flex",
+      "label": "middle middle-joint flexor (curls the tip too)",
+      "device": "servo4",
+      "spool": 11.29,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -27.95,
+            88.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            7,
+            50,
+            1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            7,
+            128,
+            1.6
+          ]
+        },
+        {
+          "link": "middle_knuckle",
+          "at": [
+            2,
+            11.5,
+            1.6
+          ]
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            2,
+            5.5,
+            1.6
+          ]
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            4.5,
+            36.5,
+            10
+          ]
+        },
+        {
+          "link": "middle_mid",
+          "at": [
+            4.5,
+            20.5,
+            9.5
+          ]
+        },
+        {
+          "link": "middle_dist",
+          "at": [
+            4.5,
+            14,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_mcp_exte",
+      "label": "middle knuckle extensor",
+      "device": "servo3",
+      "spool": 4.76,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            44.85,
+            56.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            0.5,
+            50,
+            -10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            0.5,
+            142,
+            -10
+          ]
+        },
+        {
+          "wrap": "middle_mcp",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            -4.5,
+            9.8,
+            -10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_pip_exte",
+      "label": "middle middle-joint extensor (curls the tip too)",
+      "device": "servo4",
+      "spool": 8.77,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -27.95,
+            88.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            7,
+            50,
+            -1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            7,
+            128,
+            -1.6
+          ]
+        },
+        {
+          "link": "middle_knuckle",
+          "at": [
+            2,
+            11.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            2,
+            5.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "middle_prox",
+          "at": [
+            4.5,
+            36.5,
+            -10
+          ]
+        },
+        {
+          "wrap": "middle_pip",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "middle_mid",
+          "at": [
+            4.5,
+            9.8,
+            -9.5
+          ]
+        },
+        {
+          "link": "middle_mid",
+          "at": [
+            4.5,
+            20.5,
+            -9.5
+          ]
+        },
+        {
+          "wrap": "middle_dip",
+          "r": 9.0,
+          "sense": 1
+        },
+        {
+          "link": "middle_dist",
+          "at": [
+            4.5,
+            9.8,
+            -9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_abd_a",
+      "label": "middle spread, -X side",
+      "device": "servo13",
+      "spool": 4.97,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -18.35,
+            184.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            0,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            0,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "middle_knuckle",
+          "at": [
+            -5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "middle_abd_b",
+      "label": "middle spread, +X side",
+      "device": "servo13",
+      "spool": 4.97,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -18.35,
+            184.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            10,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            10,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "middle_knuckle",
+          "at": [
+            5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_mcp_flex",
+      "label": "ring knuckle flexor",
+      "device": "servo5",
+      "spool": 6.21,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            10.05,
+            88.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            22.5,
+            50,
+            10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            22.5,
+            142,
+            10
+          ]
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            -4.5,
+            19.5,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_pip_flex",
+      "label": "ring middle-joint flexor (curls the tip too)",
+      "device": "servo6",
+      "spool": 11.25,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            48.05,
+            88.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            29,
+            50,
+            1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            29,
+            128,
+            1.6
+          ]
+        },
+        {
+          "link": "ring_knuckle",
+          "at": [
+            2,
+            11.5,
+            1.6
+          ]
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            2,
+            5.5,
+            1.6
+          ]
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            4.5,
+            33.5,
+            10
+          ]
+        },
+        {
+          "link": "ring_mid",
+          "at": [
+            4.5,
+            18.5,
+            9.5
+          ]
+        },
+        {
+          "link": "ring_dist",
+          "at": [
+            4.5,
+            13,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_mcp_exte",
+      "label": "ring knuckle extensor",
+      "device": "servo5",
+      "spool": 4.76,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            10.05,
+            88.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            22.5,
+            50,
+            -10
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            22.5,
+            142,
+            -10
+          ]
+        },
+        {
+          "wrap": "ring_mcp",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            -4.5,
+            9.8,
+            -10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_pip_exte",
+      "label": "ring middle-joint extensor (curls the tip too)",
+      "device": "servo6",
+      "spool": 8.77,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            48.05,
+            88.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            29,
+            50,
+            -1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            29,
+            128,
+            -1.6
+          ]
+        },
+        {
+          "link": "ring_knuckle",
+          "at": [
+            2,
+            11.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            2,
+            5.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "ring_prox",
+          "at": [
+            4.5,
+            33.5,
+            -10
+          ]
+        },
+        {
+          "wrap": "ring_pip",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "ring_mid",
+          "at": [
+            4.5,
+            9.8,
+            -9.5
+          ]
+        },
+        {
+          "link": "ring_mid",
+          "at": [
+            4.5,
+            18.5,
+            -9.5
+          ]
+        },
+        {
+          "wrap": "ring_dip",
+          "r": 9.0,
+          "sense": 1
+        },
+        {
+          "link": "ring_dist",
+          "at": [
+            4.5,
+            9.8,
+            -9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_abd_a",
+      "label": "ring spread, -X side",
+      "device": "servo14",
+      "spool": 4.97,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            19.65,
+            184.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            22,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            22,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "ring_knuckle",
+          "at": [
+            -5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ring_abd_b",
+      "label": "ring spread, +X side",
+      "device": "servo14",
+      "spool": 4.97,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            19.65,
+            184.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            32,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            32,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "ring_knuckle",
+          "at": [
+            5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_mcp_flex",
+      "label": "little knuckle flexor",
+      "device": "servo7",
+      "spool": 5.8,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -24.75,
+            120.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            44.5,
+            50,
+            9
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            44.5,
+            142,
+            9
+          ]
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            -4.5,
+            19.5,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_pip_flex",
+      "label": "little middle-joint flexor (curls the tip too)",
+      "device": "servo8",
+      "spool": 10.3,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            13.25,
+            120.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            51,
+            50,
+            1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            51,
+            128,
+            1.6
+          ]
+        },
+        {
+          "link": "little_knuckle",
+          "at": [
+            2,
+            11.5,
+            1.6
+          ]
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            2,
+            5.5,
+            1.6
+          ]
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            4.5,
+            25.5,
+            9
+          ]
+        },
+        {
+          "link": "little_mid",
+          "at": [
+            4.5,
+            12.5,
+            8.5
+          ]
+        },
+        {
+          "link": "little_dist",
+          "at": [
+            4.5,
+            11,
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_mcp_exte",
+      "label": "little knuckle extensor",
+      "device": "servo7",
+      "spool": 4.26,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -24.75,
+            120.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            44.5,
+            50,
+            -9
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            44.5,
+            142,
+            -9
+          ]
+        },
+        {
+          "wrap": "little_mcp",
+          "r": 8.5,
+          "sense": 1
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            -4.5,
+            9.8,
+            -9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_pip_exte",
+      "label": "little middle-joint extensor (curls the tip too)",
+      "device": "servo8",
+      "spool": 7.83,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            13.25,
+            120.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            51,
+            50,
+            -1.6
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            51,
+            128,
+            -1.6
+          ]
+        },
+        {
+          "link": "little_knuckle",
+          "at": [
+            2,
+            11.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            2,
+            5.5,
+            -1.6
+          ]
+        },
+        {
+          "link": "little_prox",
+          "at": [
+            4.5,
+            25.5,
+            -9
+          ]
+        },
+        {
+          "wrap": "little_pip",
+          "r": 8.5,
+          "sense": 1
+        },
+        {
+          "link": "little_mid",
+          "at": [
+            4.5,
+            9.8,
+            -8.5
+          ]
+        },
+        {
+          "link": "little_mid",
+          "at": [
+            4.5,
+            12.5,
+            -8.5
+          ]
+        },
+        {
+          "wrap": "little_dip",
+          "r": 8.0,
+          "sense": 1
+        },
+        {
+          "link": "little_dist",
+          "at": [
+            4.5,
+            9.8,
+            -8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_abd_a",
+      "label": "little spread, -X side",
+      "device": "servo15",
+      "spool": 4.93,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            57.65,
+            184.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            44,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            44,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "little_knuckle",
+          "at": [
+            -5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "little_abd_b",
+      "label": "little spread, +X side",
+      "device": "servo15",
+      "spool": 4.93,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            57.65,
+            184.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            54,
+            50,
+            0
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            54,
+            126,
+            0
+          ]
+        },
+        {
+          "link": "little_knuckle",
+          "at": [
+            5,
+            -3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_rot_a",
+      "label": "thumb opposition, pulls it across the palm",
+      "device": "servo9",
+      "spool": 4.63,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            51.25,
+            120.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -24,
+            50,
+            11
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -24.1,
+            82.73,
+            11
+          ]
+        },
+        {
+          "wrap": "thumb_rot",
+          "r": 9.3,
+          "sense": -1
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            -9.5,
+            3,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_rot_b",
+      "label": "thumb opposition, pulls it back",
+      "device": "servo9",
+      "spool": 4.64,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            51.25,
+            120.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -24,
+            50,
+            1
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -29.05,
+            87.68,
+            1
+          ]
+        },
+        {
+          "wrap": "thumb_rot",
+          "r": 9.3,
+          "sense": 1
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            -9.5,
+            9,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_cmc_flex",
+      "label": "thumb base flexor",
+      "device": "servo10",
+      "spool": 6.08,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -21.55,
+            152.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -26,
+            50,
+            8
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -29.76,
+            65.76,
+            6
+          ]
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            -4.5,
+            4.5,
+            10
+          ]
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            -4.5,
+            19.5,
+            10.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_mcp_flex",
+      "label": "thumb middle-joint flexor (curls the tip too)",
+      "device": "servo11",
+      "spool": 9.06,
+      "wind": 1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            16.45,
+            152.5,
+            23
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -28,
+            50,
+            9
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -29.76,
+            65.76,
+            6
+          ]
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            4.5,
+            14,
+            1.6
+          ]
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            4.5,
+            9.8,
+            1.6
+          ]
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            4.5,
+            24.5,
+            10.5
+          ]
+        },
+        {
+          "link": "thumb_prox",
+          "at": [
+            4.5,
+            18.5,
+            10
+          ]
+        },
+        {
+          "link": "thumb_dist",
+          "at": [
+            4.5,
+            17,
+            9.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_cmc_exte",
+      "label": "thumb base extensor",
+      "device": "servo10",
+      "spool": 5,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            -21.55,
+            152.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -26,
+            50,
+            4
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -29.76,
+            65.76,
+            6
+          ]
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            -4.5,
+            4.5,
+            -10
+          ]
+        },
+        {
+          "wrap": "thumb_cmc",
+          "r": 10,
+          "sense": 1
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            -4.5,
+            19.5,
+            -10.5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thumb_mcp_exte",
+      "label": "thumb middle-joint extensor (curls the tip too)",
+      "device": "servo11",
+      "spool": 7.21,
+      "wind": -1,
+      "path": [
+        {
+          "link": "forearm",
+          "at": [
+            16.45,
+            152.5,
+            26.5
+          ],
+          "sheath": true
+        },
+        {
+          "link": "palm",
+          "at": [
+            -28,
+            50,
+            3
+          ]
+        },
+        {
+          "link": "palm",
+          "at": [
+            -29.76,
+            65.76,
+            6
+          ]
+        },
+        {
+          "link": "thumb_base",
+          "at": [
+            4.5,
+            14,
+            -1.6
+          ]
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            4.5,
+            9.8,
+            -1.6
+          ]
+        },
+        {
+          "link": "thumb_meta",
+          "at": [
+            4.5,
+            24.5,
+            -10.5
+          ]
+        },
+        {
+          "wrap": "thumb_mcp",
+          "r": 10,
+          "sense": 1
+        },
+        {
+          "link": "thumb_prox",
+          "at": [
+            4.5,
+            18.5,
+            -10
+          ]
+        },
+        {
+          "wrap": "thumb_ip",
+          "r": 9.5,
+          "sense": 1
+        },
+        {
+          "link": "thumb_dist",
+          "at": [
+            4.5,
+            17,
+            -9.5
+          ]
+        }
+      ]
+    }
+  ],
   "hardware": [
     {
-      "item": "M2 screw used as hinge axle",
-      "qty": 19,
-      "note": "one per finger hinge and knuckle; 2.4 mm clearance holes"
+      "item": "M2 screw and nut (hinge axle)",
+      "qty": 20,
+      "note": "one per hinge, lengths as drawn; 2.4 mm clearance holes"
     },
     {
       "item": "M2 screw (servo tabs)",
@@ -2309,20 +6989,18 @@
     {
       "item": "Braided line for tendons",
       "qty": 30,
-      "note": "flexor and extensor per driven joint; 1.6 mm channels"
+      "note": "one run per tendon, from the spool groove to the anchor eyelet"
     },
     {
       "item": "PTFE tube (tendon sheath)",
       "qty": 1,
-      "note": "cut one sheath per tendon run from the bed to the palm"
-    },
-    {
-      "item": "Elastic cord or torsion spring (finger return)",
-      "qty": 5
+      "note": "3 mm OD; cut one sheath per tendon from its bed stop to the palm"
     }
   ],
   "notes": [
-    "Kinematics only: tendon stretch, friction and grip force are not simulated; the tip joints follow the middle joints by fixed ratios (0.7 fingers, 0.9 thumb).",
+    "Each servo carries a printed two-groove spool: the flexor winds on one groove, the extensor on the other, so the servo pulls the joint both ways. Spool radii are fitted so the line the spool takes up matches what the joints take up over their range; the lab shows the remaining slack or stretch of every line.",
+    "Lines run on the palm side (flexors) and the back (extensors) through eyelets; the middle-joint lines cross the knuckle next to its pin, so flexing the knuckle hardly pulls them. Tips follow the middle joints by fixed ratios (0.7 fingers, 0.9 thumb), standing in for a coupling the tendon alone does not set.",
+    "Not simulated: line stretch, friction in the sheaths and eyelets, grip force.",
     "17 servos need their own 5 V supply (the template uses a bench supply) with its ground shared by both boards.",
     "The SG90 pockets are the case outline plus 0.2 mm per side; the tab screw holes are not in a drawing we could read — mark them from your servos.",
     "Board U1 drives flexion and the thumb (11 servos), U2 spread and wrist (6): the Arduino Servo library runs at most 12 servos on an Uno."

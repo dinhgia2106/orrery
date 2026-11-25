@@ -3,11 +3,14 @@
 // and each model reads its simulated part by id.
 import { Grid, OrbitControls, RoundedBox, TransformControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { BufferAttribute, BufferGeometry, CatmullRomCurve3, DoubleSide, Material, Mesh as ThreeMesh, MeshBasicMaterial, MeshStandardMaterial as StdMaterial, Plane, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { BufferAttribute, BufferGeometry, CanvasTexture, CatmullRomCurve3, Color, DoubleSide, Material, Mesh as ThreeMesh, MeshBasicMaterial, MeshStandardMaterial as StdMaterial, Plane, RepeatWrapping, TubeGeometry, Euler, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { jointValues, type Assembly, type Joint, type Link, type Mount, type Vec3 } from './mech/assembly';
+import { CableGeometry, sheathCurve } from './mech/cable';
 import type { Dynamics } from './mech/dynamics';
+import { linkFrames } from './mech/physics';
+import { SPOOL, mountMatrix, tendonModels, tensionShare } from './mech/tendon';
 import { partMesh } from './mech/fabricate';
 import { DEVICES } from './lab/devices';
 import type { LabSimulation } from './lab/labsim';
@@ -137,14 +140,73 @@ function Uno({ level, at = UNO_POS }: { level: () => number; at?: V3 }) {
 
 // ───────────────────────── Parts ─────────────────────────
 
-/** TowerPro SG90, standing with the output shaft up. Origin at the shaft axis on the desk. */
-function Sg90({ angleRef, children }: { angleRef: () => number; children?: ReactNode }) {
+const SG90_SHAFT_OFFSET = SPEC.sg90.lengthMm / 2 - 5.9; // approx: shaft sits over one end of the case
+/**
+ * The SG90 lead, drawn as a short stub (its real length is not in the sources we have) ending in a 3-way
+ * 2.54 mm-pitch housing that bench wires plug into: brown GND, red V+, orange signal, in that order.
+ */
+const SG90_LEAD_MM = 16;
+const SG90_PLUG_MM = 8;
+export function servoLeadLocal(pin: string): V3 {
+  const i = Math.max(0, ['GND', 'V+', 'SIG'].indexOf(pin));
+  return [SG90_SHAFT_OFFSET + SPEC.sg90.lengthMm / 2 + SG90_LEAD_MM + SG90_PLUG_MM, 4, (i - 1) * 2.54];
+}
+
+/** Groove radii of a two-groove spool: [the groove reeling in as the angle grows, the other]; 0 = groove unused. */
+type SpoolRadii = [number, number];
+
+/** Printed spool on an actuator shaft: two grooves (radii r) between three flanges (SPOOL in tendon.ts). Base at y = 0. */
+function Spool({ r }: { r: SpoolRadii }) {
+  const T = SPOOL.thicknessMm;
+  const R = Math.max(r[0], r[1]);
+  const hub = (rad: number, y0: number, y1: number) => (
+    <mesh position={[0, (y0 + y1) / 2, 0]} castShadow>
+      <cylinderGeometry args={[rad || R, rad || R, y1 - y0, 32]} />
+      <meshStandardMaterial color="#f2f4f7" roughness={0.6} />
+    </mesh>
+  );
+  return (
+    <group>
+      {hub(r[0], 0.8, 2.35)}
+      {hub(r[1], 3.15, 4.7)}
+      {[0.4, 2.75, 5.1].map((y) => (
+        <mesh key={y} position={[0, y, 0]} castShadow>
+          <cylinderGeometry args={[R + 1.5, R + 1.5, 0.8, 32]} />
+          <meshStandardMaterial color="#dde2e9" roughness={0.6} />
+        </mesh>
+      ))}
+      {/* the screw into the shaft, and a mark so the spool's turn shows */}
+      <mesh position={[0, T + 0.3, 0]}>
+        <cylinderGeometry args={[1.9, 1.9, 0.6, 16]} />
+        <meshStandardMaterial color="#9aa2aa" metalness={0.8} roughness={0.3} />
+      </mesh>
+      <mesh position={[R * 0.6, T + 0.05, 0]}>
+        <boxGeometry args={[R * 0.6, 0.2, 0.8]} />
+        <meshStandardMaterial color="#1c4fa0" />
+      </mesh>
+    </group>
+  );
+}
+
+/** Each actuator's spool, from the tendons it pulls. */
+function spoolRadii(asm: Assembly): Map<string, SpoolRadii> {
+  const out = new Map<string, SpoolRadii>();
+  for (const t of asm.tendons ?? []) {
+    const r = out.get(t.device) ?? [0, 0];
+    r[t.wind === 1 ? 0 : 1] = Math.max(r[t.wind === 1 ? 0 : 1], t.spool);
+    out.set(t.device, r);
+  }
+  return out;
+}
+
+/** TowerPro SG90, standing with the output shaft up. Origin at the shaft axis on the desk. With `spool`, a printed tendon spool replaces the horn. */
+function Sg90({ angleRef, spool, children }: { angleRef: () => number; spool?: SpoolRadii; children?: ReactNode }) {
   const horn = useRef<Group>(null);
   useFrame(() => {
     if (horn.current) horn.current.rotation.y = (angleRef() - 90) * DEG;
   });
   const { lengthMm: L, widthMm: W, heightMm: H, tabSpanMm } = SPEC.sg90;
-  const shaftOffset = L / 2 - 5.9; // approx: shaft sits over one end of the case
+  const shaftOffset = SG90_SHAFT_OFFSET;
   const body = (
     <meshPhysicalMaterial color="#2f6fe0" transmission={0.35} roughness={0.35} thickness={4} transparent opacity={0.88} />
   );
@@ -164,26 +226,36 @@ function Sg90({ angleRef, children }: { angleRef: () => number; children?: React
           <cylinderGeometry args={[W / 2, W / 2, 4, 32]} />
           {body}
         </mesh>
-        {/* lead: brown GND, red +, orange signal */}
+        {/* lead out of the case end: brown GND, red +, orange signal, into a 3-way housing */}
         {['#5a3a22', '#d22', '#f28c1a'].map((c, i) => (
-          <mesh key={c} position={[L / 2 + 4, 4, (i - 1) * 1.1]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.5, 0.5, 8, 8]} />
+          <mesh key={c} position={[L / 2 + SG90_LEAD_MM / 2, 4, (i - 1) * 1.1]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.5, 0.5, SG90_LEAD_MM, 8]} />
             <meshStandardMaterial color={c} />
           </mesh>
         ))}
+        <mesh position={[L / 2 + SG90_LEAD_MM + SG90_PLUG_MM / 2, 4, 0]} castShadow>
+          <boxGeometry args={[SG90_PLUG_MM, 2.5, 7.6]} />
+          <meshStandardMaterial color="#1d1f22" roughness={0.5} />
+        </mesh>
       </group>
       <mesh position={[0, H + 1, 0]}>
         <cylinderGeometry args={[2.4, 2.4, 2, 20]} />
         <meshStandardMaterial color="#f2f2f2" />
       </mesh>
-      <group ref={horn} position={[0, H + 2, 0]}>
-        <RoundedBox args={[17, 1.6, 5]} radius={0.7} position={[6, 0.8, 0]} castShadow>
-          <meshStandardMaterial color="#f4f4f4" roughness={0.6} />
-        </RoundedBox>
-        <mesh position={[0, 1.2, 0]}>
-          <cylinderGeometry args={[3.5, 3.5, 2.4, 24]} />
-          <meshStandardMaterial color="#f4f4f4" roughness={0.6} />
-        </mesh>
+      <group ref={horn} position={[0, SPOOL.servoSeatMm, 0]}>
+        {spool ? (
+          <Spool r={spool} />
+        ) : (
+          <>
+            <RoundedBox args={[17, 1.6, 5]} radius={0.7} position={[6, 0.8, 0]} castShadow>
+              <meshStandardMaterial color="#f4f4f4" roughness={0.6} />
+            </RoundedBox>
+            <mesh position={[0, 1.2, 0]}>
+              <cylinderGeometry args={[3.5, 3.5, 2.4, 24]} />
+              <meshStandardMaterial color="#f4f4f4" roughness={0.6} />
+            </mesh>
+          </>
+        )}
         {children}
       </group>
     </group>
@@ -191,7 +263,7 @@ function Sg90({ angleRef, children }: { angleRef: () => number; children?: React
 }
 
 /** NEMA 17 (SY42STH47-1206A): 42.3 mm square × 48 mm, 5 mm D shaft along +z. Origin at the shaft axis on the front face. */
-function Nema17({ angleRef, children }: { angleRef: () => number; children?: ReactNode }) {
+function Nema17({ angleRef, spool, children }: { angleRef: () => number; spool?: SpoolRadii; children?: ReactNode }) {
   const shaft = useRef<Group>(null);
   useFrame(() => {
     if (shaft.current) shaft.current.rotation.z = angleRef() * DEG; // positive = counter-clockwise seen from the shaft end
@@ -222,6 +294,11 @@ function Nema17({ angleRef, children }: { angleRef: () => number; children?: Rea
           <cylinderGeometry args={[shaftDiaMm / 2, shaftDiaMm / 2, shaftLenMmApprox, 24]} />
           <meshStandardMaterial color="#d7dbdf" metalness={0.95} roughness={0.15} />
         </mesh>
+        {spool && (
+          <group position={[0, 0, SPOOL.stepperSeatMm]} rotation={[Math.PI / 2, 0, 0]}>
+            <Spool r={spool} />
+          </group>
+        )}
         {children}
       </group>
     </group>
@@ -398,25 +475,227 @@ function Psu3D({ volts }: { volts: number }) {
 
 // ───────────────────────── Wires ─────────────────────────
 
-function Wire({ from, to, color, lift = 18 }: { from: V3; to: V3; color: string; lift?: number }) {
-  const curve = useMemo(() => {
-    const a = new Vector3(...from);
-    const b = new Vector3(...to);
-    const top = Math.max(a.y, b.y) + lift;
-    return new CatmullRomCurve3([
-      a,
-      new Vector3(a.x, a.y + 4, a.z),
-      new Vector3((a.x * 2 + b.x) / 3, top, (a.z * 2 + b.z) / 3),
-      new Vector3((a.x + b.x * 2) / 3, top, (a.z + b.z * 2) / 3),
-      new Vector3(b.x, b.y + 4, b.z),
-      b,
-    ]);
-  }, [from, to, lift]);
+function wireCurve(a: V3, b: V3, lift: number): CatmullRomCurve3 {
+  const A = new Vector3(...a);
+  const B = new Vector3(...b);
+  const top = Math.max(A.y, B.y) + lift;
+  return new CatmullRomCurve3([
+    A,
+    new Vector3(A.x, A.y + 4, A.z),
+    new Vector3((A.x * 2 + B.x) / 3, top, (A.z * 2 + B.z) / 3),
+    new Vector3((A.x + B.x * 2) / 3, top, (A.z + B.z * 2) / 3),
+    new Vector3(B.x, B.y + 4, B.z),
+    B,
+  ]);
+}
+
+/** One mark on a plain background, repeated along a wire or line (u runs along it). */
+function stripeTexture(bg: number, mark: number, markFrac: number): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 2;
+  const g = c.getContext('2d')!;
+  const tone = (v: number) => `rgb(${Math.round(v * 255)},${Math.round(v * 255)},${Math.round(v * 255)})`;
+  g.fillStyle = tone(bg);
+  g.fillRect(0, 0, 64, 2);
+  g.fillStyle = tone(mark);
+  g.fillRect(0, 0, Math.max(1, Math.round(64 * markFrac)), 2);
+  const t = new CanvasTexture(c);
+  t.wrapS = RepeatWrapping;
+  t.wrapT = RepeatWrapping;
+  return t;
+}
+
+type NetLevel = () => { volts: number; edges: number } | null;
+
+/**
+ * A jumper wire. Its ends follow the parts they plug into; it glows with its net's voltage (full at 5 V) and,
+ * while a board pin keeps switching the net (PWM, servo pulses, serial), marks run along it away from that pin.
+ * The marks show activity, not how fast a signal travels.
+ */
+function Wire({ from, to, color, lift = 18, level, flow = 0 }: { from: (t: number) => V3 | null; to: (t: number) => V3 | null; color: string; lift?: number; level?: NetLevel; flow?: number }) {
+  const mesh = useRef<Mesh>(null);
+  const mat = useRef<MeshStandardMaterial>(null);
+  const tex = useMemo(() => stripeTexture(0.25, 1, 0.3), []);
+  const st = useRef({ a: null as V3 | null, b: null as V3 | null, edges: -1, act: 0 });
+  const glow = useMemo(() => new Color(color).lerp(new Color('#ffffff'), 0.45), [color]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  useFrame((state, dt) => {
+    const a = from(state.clock.elapsedTime);
+    const b = to(state.clock.elapsedTime);
+    const m = mesh.current;
+    if (!a || !b || !m) return;
+    const S = st.current;
+    const moved = (p: V3 | null, q: V3) => !p || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) > 0.3;
+    if (moved(S.a, a) || moved(S.b, b)) {
+      S.a = a;
+      S.b = b;
+      const curve = wireCurve(a, b, lift);
+      m.geometry.dispose();
+      m.geometry = new TubeGeometry(curve, 64, 0.6, 8, false);
+      tex.repeat.set(curve.getLength() / 14, 1);
+    }
+    const material = mat.current;
+    if (!material) return;
+    const lv = level?.();
+    if (!lv) {
+      material.emissiveIntensity = 0;
+      return;
+    }
+    const switched = S.edges >= 0 && lv.edges !== S.edges;
+    S.edges = lv.edges;
+    S.act = switched ? 1 : S.act * Math.exp(-dt / 0.3);
+    const v = Math.min(1.2, Math.max(0, Math.abs(lv.volts) / 5));
+    material.emissiveIntensity = 0.06 + 0.3 * v + 0.6 * S.act;
+    if (S.act > 0.05 && flow) tex.offset.x -= flow * dt * 2;
+  });
   return (
-    <mesh castShadow>
-      <tubeGeometry args={[curve, 64, 0.6, 8, false]} />
-      <meshStandardMaterial color={color} roughness={0.5} />
+    <mesh ref={mesh} castShadow>
+      <bufferGeometry />
+      <meshStandardMaterial ref={mat} color={color} roughness={0.5} emissive={glow} emissiveMap={tex} emissiveIntensity={0} />
     </mesh>
+  );
+}
+
+// ───────────────────────── Tendons and axles ─────────────────────────
+
+/** Link frames on the bench (mm) as they are drawn: from the dynamics when it runs, else from the joint values. */
+function benchFrames(asm: Assembly, sim: SimRef, dyn?: MutableRefObject<Dynamics | null>): Map<string, Matrix4> {
+  return dyn?.current ? dyn.current.frames() : linkFrames(asm, jointValues(asm, (dev) => deviceAngle(asm, sim, dev)));
+}
+
+function deviceAngle(asm: Assembly, sim: SimRef, dev: string): number | undefined {
+  const s = sim.current;
+  if (!s) return undefined;
+  const servo = s.servos.get(dev);
+  if (servo) return servo.angle;
+  return asm.mounts?.some((m) => m.device === dev && m.kind === 'stepper') ? s.motorAngle(dev) : undefined;
+}
+
+/** Link frames for the current frame, computed once per frame however many parts ask. */
+function useBenchFrames(asm: Assembly | undefined, sim: SimRef, dyn?: MutableRefObject<Dynamics | null>) {
+  const cache = useRef<{ t: number; f: Map<string, Matrix4> | null }>({ t: -1, f: null });
+  return useCallback(
+    (t: number) => {
+      if (!asm) return null;
+      if (cache.current.t !== t || !cache.current.f) cache.current = { t, f: benchFrames(asm, sim, dyn) };
+      return cache.current.f;
+    },
+    [asm, sim, dyn],
+  );
+}
+
+const SLACK = new Color('#aab4c0');
+const AMBER = new Color('#f0a020');
+const RED = new Color('#e0322b');
+const LINE_PERIOD_MM = 8;
+const SHEATH_OD_MM = 3; // PTFE tube outer diameter: a design choice for the drawing
+
+/**
+ * Every tendon of the mechanism: the turns on its spool, the line through PTFE sheaths and guides to its anchor.
+ * Its colour is the tension the actuator puts into it (grey none → amber half → red at stall); the marks on it
+ * are fixed on the line, so they slide through the guides as the spool reels it in.
+ */
+function Tendons({ asm, sim, dyn, frames }: { asm: Assembly; sim: SimRef; dyn?: MutableRefObject<Dynamics | null>; frames: (t: number) => Map<string, Matrix4> | null }) {
+  const models = useMemo(() => tendonModels(asm), [asm]);
+  const lines = useMemo(() => models.map(() => new CableGeometry(160, 6, 0.35)), [models]);
+  const sheaths = useMemo(() => models.map((m) => m.tendon.path.filter((p) => 'link' in p && p.sheath).map(() => new CableGeometry(28, 10, SHEATH_OD_MM / 2))), [models]);
+  const mats = useRef<(MeshStandardMaterial | null)[]>([]);
+  const tex = useMemo(() => {
+    const t = stripeTexture(1, 0.55, 0.35);
+    t.repeat.set(1 / LINE_PERIOD_MM, 1);
+    return t;
+  }, []);
+  useEffect(
+    () => () => {
+      lines.forEach((g) => g.dispose());
+      sheaths.flat().forEach((g) => g.dispose());
+    },
+    [lines, sheaths],
+  );
+  useFrame((state) => {
+    const f = frames(state.clock.elapsedTime);
+    if (!f) return;
+    const efforts = dyn?.current ? dyn.current.actuatorEfforts() : null;
+    models.forEach((m, i) => {
+      const dev = m.tendon.device;
+      const st = m.at(f, deviceAngle(asm, sim, dev) ?? m.homeAngle);
+      // sheathed runs are drawn bent, leaving and entering along the free line on either side
+      const pts: Vector3[] = [];
+      const u: number[] = [];
+      let sh = 0;
+      for (let k = 0; k < st.points.length; k++) {
+        if (k > 0 && st.sheathed[k - 1]) {
+          const a = st.points[k - 1];
+          const b = st.points[k];
+          const ta = k >= 2 ? a.clone().sub(st.points[k - 2]) : b.clone().sub(a);
+          const tb = k + 1 < st.points.length ? st.points[k + 1].clone().sub(b) : b.clone().sub(a);
+          const curve = sheathCurve(a, b, ta, tb);
+          sheaths[i][sh++]?.update(curve);
+          const inner = curve.slice(1, -1);
+          inner.forEach((p, j) => {
+            pts.push(p);
+            u.push(st.along[k - 1] + ((st.along[k] - st.along[k - 1]) * (j + 1)) / (inner.length + 1));
+          });
+        }
+        pts.push(st.points[k]);
+        u.push(st.along[k]);
+      }
+      lines[i].update(pts, u);
+      const effort = efforts ? efforts.get(dev) : sim.current?.actuatorEffort(dev);
+      const share = tensionShare(m.tendon, effort ?? 0);
+      const c = share < 0.5 ? SLACK.clone().lerp(AMBER, share * 2) : AMBER.clone().lerp(RED, (share - 0.5) * 2);
+      mats.current[i]?.color.copy(c);
+    });
+  });
+  return (
+    <>
+      {models.map((m, i) => (
+        <group key={m.tendon.id}>
+          <mesh geometry={lines[i]} castShadow>
+            <meshStandardMaterial ref={(x) => void (mats.current[i] = x)} color="#aab4c0" map={tex} roughness={0.55} />
+          </mesh>
+          {sheaths[i].map((g, k) => (
+            <mesh key={k} geometry={g}>
+              <meshPhysicalMaterial color="#f7f9fb" transparent opacity={0.4} roughness={0.25} depthWrite={false} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Socket head cap screw used as a hinge axle, with its nut: head per ISO 4762 (M2: dk 3.8, k 2; M3: dk 5.5, k 3),
+ * hex nut per ISO 4032 (M2: s 4, m 1.6; M3: s 5.5, m 2.4). Drawn in the parent link frame along the joint axis.
+ */
+const SCREW = { M2: { d: 2, dk: 3.8, k: 2, s: 4, m: 1.6 }, M3: { d: 3, dk: 5.5, k: 3, s: 5.5, m: 2.4 } };
+function AxleScrew({ joint }: { joint: Joint }) {
+  const q = useMemo(() => {
+    const ax = new Vector3(...(joint.axis ?? [0, 0, 1])).normalize();
+    const r = new Quaternion().setFromEuler(new Euler(...rad(joint.rotation)));
+    return r.multiply(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), ax));
+  }, [joint.axis, joint.rotation]);
+  if (!joint.axle) return null;
+  const sc = SCREW[joint.axle.size];
+  const L = joint.axle.length;
+  const steel = <meshStandardMaterial color="#8d959e" metalness={0.9} roughness={0.3} />;
+  return (
+    <group position={joint.position} quaternion={q}>
+      <mesh castShadow>
+        <cylinderGeometry args={[sc.d / 2, sc.d / 2, L, 16]} />
+        {steel}
+      </mesh>
+      <mesh position={[0, -L / 2 - sc.k / 2, 0]} castShadow>
+        <cylinderGeometry args={[sc.dk / 2, sc.dk / 2, sc.k, 20]} />
+        {steel}
+      </mesh>
+      <mesh position={[0, L / 2 - sc.m / 2, 0]} castShadow>
+        <cylinderGeometry args={[sc.s / Math.sqrt(3), sc.s / Math.sqrt(3), sc.m, 6]} />
+        {steel}
+      </mesh>
+    </group>
   );
 }
 
@@ -551,13 +830,13 @@ function Movable({ position, rotation, active, onMove, children }: { position: V
 }
 
 /** The bench device a mount places on a link, with its live state. */
-function MountedDevice({ mount, sim }: { mount: Mount; sim: SimRef }) {
+function MountedDevice({ mount, sim, spool }: { mount: Mount; sim: SimRef; spool?: SpoolRadii }) {
   const id = mount.device;
   switch (mount.kind) {
     case 'servo':
-      return <Sg90 angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
+      return <Sg90 spool={spool} angleRef={() => sim.current?.servos.get(id)?.angle ?? 90} />;
     case 'stepper':
-      return <Nema17 angleRef={() => sim.current?.motorAngle(id) ?? 0} />;
+      return <Nema17 spool={spool} angleRef={() => sim.current?.motorAngle(id) ?? 0} />;
     case 'a4988':
       return <A4988Carrier />;
     case 'button':
@@ -620,6 +899,7 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
   const [looseList, setLooseList] = useState<{ id: string; kind: 'ball' | 'box'; sizeMm: number }[]>([]);
   /** Parts in contact with another part, refreshed every few frames. */
   const [touching, setTouching] = useState<Set<string>>(new Set());
+  const spools = useMemo(() => spoolRadii(asm), [asm]);
   const frame = useRef(0);
   useFrame((_, delta) => {
     const d = dyn.current;
@@ -657,8 +937,13 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
             .filter((m) => m.link === link.id)
             .map((m) => (
               <group key={m.device} position={m.position} rotation={rad(m.rotation)}>
-                <MountedDevice mount={m} sim={sim} />
+                <MountedDevice mount={m} sim={sim} spool={spools.get(m.device)} />
               </group>
+            ))}
+          {asm.joints
+            .filter((j) => j.parent === link.id && j.axle)
+            .map((j) => (
+              <AxleScrew key={j.id} joint={j} />
             ))}
         </group>
       ))}
@@ -682,6 +967,7 @@ function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: Lab
     return m;
   }, [asm]);
   const root = asm.links.find((l) => !asm.joints.some((j) => j.child === l.id))!;
+  const spools = useMemo(() => spoolRadii(asm), [asm]);
   const render = (id: string): ReactNode => {
     const link = asm.links.find((l) => l.id === id)!;
     return (
@@ -691,8 +977,13 @@ function AssemblyView({ asm, sim, lab }: { asm: Assembly; sim: SimRef; lab?: Lab
           .filter((m) => m.link === id)
           .map((m) => (
             <group key={m.device} position={m.position} rotation={rad(m.rotation)}>
-              <MountedDevice mount={m} sim={sim} />
+              <MountedDevice mount={m} sim={sim} spool={spools.get(m.device)} />
             </group>
+          ))}
+        {(byParent.get(id) ?? [])
+          .filter((j) => j.axle)
+          .map((j) => (
+            <AxleScrew key={`${j.id}-axle`} joint={j} />
           ))}
         {(byParent.get(id) ?? []).map((j) => (
           <JointNode key={j.id} joint={j} render={render} values={values} lab={lab} />
@@ -743,25 +1034,6 @@ function benchFrame(project: Project): { target: V3; camera: V3 } {
   const t: V3 = [c.x / 10, Math.max(2, c.y / 10), c.z / 10];
   const d = (size / 10) * 1.15;
   return { target: t, camera: [t[0] + d * 0.25, t[1] + d * 0.55, t[2] + d * 1.0] };
-}
-
-/** Where a mounted device sits on the bench with every joint at home — used to end its wires. */
-function mountWorld(asm: Assembly, device: string): V3 | null {
-  const m = asm.mounts?.find((x) => x.device === device);
-  if (!m) return null;
-  const parentJoint = new Map(asm.joints.map((j) => [j.child, j]));
-  const local = (pos?: Vec3, rot?: Vec3) => new Matrix4().compose(new Vector3(...(pos ?? [0, 0, 0])), new Quaternion().setFromEuler(new Euler(...rad(rot))), new Vector3(1, 1, 1));
-  let mat = local(m.position, m.rotation);
-  let link = m.link;
-  for (let guard = 0; guard < 400; guard++) {
-    const j = parentJoint.get(link);
-    if (!j) break;
-    mat = local(j.position, j.rotation).multiply(mat);
-    link = j.parent;
-  }
-  mat = local(asm.placement ?? [150, 0, 0]).multiply(mat);
-  const p = new Vector3().setFromMatrixPosition(mat);
-  return [p.x, p.y + 4, p.z];
 }
 
 const SPREAD = 4; // wiring-canvas units per millimetre on the bench (layout only)
@@ -834,6 +1106,28 @@ function SectionCut({ section }: { section?: Section }) {
   );
 }
 
+/** The jumper wires (ends following moving parts) and the mechanism's tendons. */
+function BenchWires({ project, sim, dyn, anchor, isBoard }: { project: Project; sim: SimRef; dyn?: MutableRefObject<Dynamics | null>; anchor: (ref: string, frames: (t: number) => Map<string, Matrix4> | null) => (t: number) => V3 | null; isBoard: (ref: string) => boolean }) {
+  const asm = project.assembly;
+  const frames = useBenchFrames(asm, sim, dyn);
+  return (
+    <>
+      {project.wires.map((w) => (
+        <Wire
+          key={w.id}
+          from={anchor(w.a, frames)}
+          to={anchor(w.b, frames)}
+          color={w.color}
+          lift={14}
+          flow={isBoard(w.a) ? 1 : isBoard(w.b) ? -1 : 0}
+          level={() => sim.current?.netState(w.a) ?? null}
+        />
+      ))}
+      {asm?.tendons?.length ? <Tendons asm={asm} sim={sim} dyn={dyn} frames={frames} /> : null}
+    </>
+  );
+}
+
 export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section; dyn?: MutableRefObject<Dynamics | null> }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
@@ -853,18 +1147,39 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
   }
   const boards = project.devices.filter((d) => d.kind === 'uno');
 
-  const anchor = (ref: string): V3 | null => {
+  /** Where a wire end plugs in: a header pin or a part's lead — following a part mounted on a moving link. */
+  const anchor = (ref: string, frames: (t: number) => Map<string, Matrix4> | null): ((t: number) => V3 | null) => {
     const [id, pin] = ref.split('.');
     const board = boards.find((b) => b.id === id);
-    if (board) return pinWorld(pin, place.get(board.id));
-    if (asm && mounted.has(id)) return mountWorld(asm, id);
+    if (board) {
+      const p = pinWorld(pin, place.get(board.id));
+      return () => p;
+    }
+    const m = asm?.mounts?.find((x) => x.device === id);
+    if (m) {
+      const local = new Vector3(...(m.kind === 'servo' ? servoLeadLocal(pin) : [0, 4, 0]));
+      const mm = mountMatrix(m);
+      return (t) => {
+        const f = frames(t)?.get(m.link);
+        if (!f) return null;
+        const v = local.clone().applyMatrix4(f.clone().multiply(mm));
+        return [v.x, v.y, v.z];
+      };
+    }
     const at = place.get(id);
-    if (!at) return null;
+    if (!at) return () => null;
     const d = project.devices.find((x) => x.id === id)!;
+    if (d.kind === 'servo') {
+      const l = servoLeadLocal(pin);
+      const p: V3 = [at[0] + l[0], at[1] + l[1], at[2] + l[2]];
+      return () => p;
+    }
     const i = DEVICES[d.kind].pins.findIndex((p) => p.name === pin);
     const h = d.kind === 'psu' ? 12 : d.kind === 'stepper' ? 4 : d.kind === 'a4988' ? 8 : 3;
-    return [at[0] - 6 + i * 2.54, at[1] + h, at[2] + (d.kind === 'psu' ? 26 : 0)];
+    const p: V3 = [at[0] - 6 + i * 2.54, at[1] + h, at[2] + (d.kind === 'psu' ? 26 : 0)];
+    return () => p;
   };
+  const isBoard = (ref: string) => boards.some((b) => b.id === ref.split('.')[0]);
 
   const nodes: ReactNode[] = [];
   for (const d of project.devices) {
@@ -897,12 +1212,6 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
     );
   }
 
-  const wires = project.wires.map((w) => {
-    const a = anchor(w.a);
-    const b = anchor(w.b);
-    return a && b ? <Wire key={w.id} from={a} to={b} color={w.color} lift={14} /> : null;
-  });
-
   return (
     <Canvas shadows camera={{ position: frame.camera, fov: 40, far: 2000 }} dpr={[1, 2]} gl={{ alpha: true }}>
       <ambientLight intensity={0.75} />
@@ -917,7 +1226,7 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
         ))}
         {asm && (dyn?.current ? <DynamicAssemblyView asm={asm} sim={sim} dyn={dyn} lab={lab} /> : <AssemblyView asm={asm} sim={sim} lab={lab} />)}
         {nodes}
-        {wires}
+        <BenchWires project={project} sim={sim} dyn={dyn} anchor={anchor} isBoard={isBoard} />
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />

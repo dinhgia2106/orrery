@@ -5,13 +5,14 @@
 
 const byte PINS[11] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
 // servo angles: index mcp, pip · middle mcp, pip · ring mcp, pip · little mcp, pip · thumb rot, cmc, mcp
+// (the thumb base servo works over 0–120°: its spool turns the base 1:2)
 const byte GESTURES[][11] = {
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},                    // 0 open
-  {180, 180, 180, 180, 180, 180, 180, 180, 120, 120, 150},  // 1 fist
-  {0, 0, 180, 180, 180, 180, 180, 180, 120, 120, 150},      // 2 point
-  {0, 0, 0, 0, 180, 180, 180, 180, 120, 120, 150},          // 3 peace
+  {180, 180, 180, 180, 180, 180, 180, 180, 120, 80, 150},   // 1 fist
+  {0, 0, 180, 180, 180, 180, 180, 180, 120, 80, 150},       // 2 point
+  {0, 0, 0, 0, 180, 180, 180, 180, 120, 80, 150},           // 3 peace
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},                    // 4 spread (U2 fans the fingers out)
-  {100, 120, 0, 0, 0, 0, 0, 0, 150, 90, 90},            // 5 OK
+  {100, 120, 0, 0, 0, 0, 0, 0, 150, 60, 90},            // 5 OK
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},                    // 6 wave (U2 waves the wrist)
 };
 const char* const NAMES[] = {"open", "fist", "point", "peace", "spread", "ok", "wave"};

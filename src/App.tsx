@@ -23,6 +23,7 @@ import { patchJoint } from './mech/edit';
 import { Dynamics, loadRapier } from './mech/dynamics';
 import { interference, linkFrames, massProperties, type Clash, type MassProps } from './mech/physics';
 import LabPanel from './mech/LabPanel';
+import { readTendons } from './mech/tendon';
 import { aiPrompt, assemblyFromStl, jointValues, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
 import { parseIntelHex } from './sim/hex';
@@ -756,6 +757,16 @@ export default function App() {
                 onSelect={setLabSel}
                 download={download}
                 physics={{
+                  tendons: () => {
+                    const asm = project.assembly;
+                    if (!asm?.tendons?.length) return [];
+                    const s = sim.current;
+                    const d = dynRef.current;
+                    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+                    const angle = (dev: string) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined);
+                    const efforts = d?.actuatorEfforts();
+                    return readTendons(asm, d ? d.frames() : linkFrames(asm, jointValues(asm, angle)), angle, (dev) => (efforts ? efforts.get(dev) : s?.actuatorEffort(dev)));
+                  },
                   massProps,
                   actuators: snapshot?.actuators ?? [],
                   totalMassG: snapshot?.mechanismMassG ?? null,

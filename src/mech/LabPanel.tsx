@@ -8,6 +8,7 @@ import { fabricationPackage, madeHere, partStl, partSvg } from './fabricate';
 import type { Project } from '../lab/project';
 import { DENSITY, type ActuatorLoad, type Clash, type MassProps } from './physics';
 import { CLEARANCE_HOLE_MM, DEFAULT_CLEARANCE_MM } from './solid';
+import type { TendonReading } from './tendon';
 
 export interface PhysicsView {
   dynamics: {
@@ -21,6 +22,8 @@ export interface PhysicsView {
     touching: () => { a: string; b: string }[];
     restOverlaps: () => number;
   };
+  /** Every tendon's tension and slack right now. */
+  tendons: () => TendonReading[];
   massProps: Map<string, MassProps> | null;
   actuators: ActuatorLoad[];
   totalMassG: number | null;
@@ -290,8 +293,47 @@ function PhysicsBlock({ physics, asm, onSelect }: { physics: PhysicsView; asm: A
         </div>
       ))}
       {asm.joints.some((j) => j.type === 'prismatic' && j.drive) && <p className="small muted">Prismatic joints: forces along the slide are not computed yet.</p>}
+      {(asm.tendons?.length ?? 0) > 0 && <TendonsBlock read={physics.tendons} />}
       <DynamicsBlock d={physics.dynamics} />
     </Block>
+  );
+}
+
+/** Tendon lines: the most loaded ones, and any that go slack or would have to stretch. */
+function TendonsBlock({ read }: { read: () => TendonReading[] }) {
+  const all = read();
+  const loaded = [...all].sort((a, b) => b.tensionN - a.tensionN).filter((t) => t.tensionN >= 0.05).slice(0, 6);
+  const off = all.filter((t) => Math.abs(t.slackMm) > 1);
+  return (
+    <div className="dyn">
+      <p className="section-toggle mono">TENDONS ({all.length})</p>
+      {loaded.length ? (
+        <table className="loads mono">
+          <tbody>
+            {loaded.map((t) => (
+              <tr key={t.id} className={t.share >= 1 ? 'over' : t.share > 0.7 ? 'high' : ''}>
+                <td title={t.label}>{t.id}</td>
+                <td>{t.tensionN.toFixed(1)} N</td>
+                <td className="bar-cell">
+                  <span className="load-bar" style={{ width: `${Math.min(100, t.share * 100)}%` }} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="small muted mono">no line carries load in this pose</p>
+      )}
+      {off.slice(0, 6).map((t) => (
+        <div key={t.id} className={`small mono ${t.slackMm < 0 ? 'warn-text' : 'muted'}`}>
+          {t.id}: {t.slackMm > 0 ? `${t.slackMm.toFixed(1)} mm slack` : `asked to stretch ${(-t.slackMm).toFixed(1)} mm`}
+        </div>
+      ))}
+      <p className="small muted">
+        Tension = the actuator's torque share (gravity and contacts it holds) ÷ spool radius, on a line taken as inextensible and frictionless. Colour in 3D: grey none → amber → red at stall. Slack compares the routed length with what
+        the spool reeled in.
+      </p>
+    </div>
   );
 }
 

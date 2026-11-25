@@ -3,15 +3,16 @@
 #include <Servo.h>
 
 const byte PINS[6] = {2, 3, 4, 5, 6, 7};
-// spread servo angles (90 = straight): index, middle, ring, little — 180 tilts towards the thumb side
+// spread servo angles (90 = straight): index, middle, ring, little — larger tilts towards the thumb side.
+// Each spread spool turns its knuckle 1:1, so index and little work over 75–105°, middle and ring over 80–100°.
 const byte SPREAD[7][4] = {
   {90, 90, 90, 90},    // open
   {90, 90, 90, 90},    // fist
   {90, 90, 90, 90},    // point
-  {150, 40, 90, 90},   // peace: index and middle apart
-  {180, 120, 60, 0},   // spread: fan out
+  {100, 84, 90, 90},   // peace: index and middle apart
+  {105, 93, 87, 75},   // spread: fan out
   {90, 90, 90, 90},    // ok
-  {120, 100, 80, 60},  // wave
+  {95, 91, 89, 85},    // wave
 };
 // wrist rotation, pitch
 const byte WRIST[7][2] = {{90, 90}, {90, 110}, {90, 90}, {90, 90}, {90, 60}, {60, 90}, {90, 90}};

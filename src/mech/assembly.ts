@@ -57,6 +57,42 @@ export type Drive =
   /** Joint value = ratio × value of another joint + offset (tendons, gears, linkages). */
   | { follow: string; ratio?: number; offset?: number };
 
+/** A screw or pin through a revolute joint: along its axis, centred on the joint origin, held by the parent. */
+export interface Axle {
+  /** Metric screw size; the parts need clearance holes (ISO 273 medium: M2 2.4 mm, M3 3.4 mm). */
+  size: 'M2' | 'M3';
+  /** Shank length, mm. */
+  length: number;
+}
+
+/** One point of a tendon's route. */
+export type TendonPoint =
+  /** A guide fixed on a link (eyelet, channel end, sheath stop) in the link frame; `sheath`: the line runs inside a sheath from here to the next point. */
+  | { link: string; at: Vec3; sheath?: boolean }
+  /**
+   * The round end of a revolute joint (radius r about its axis): the line wraps it wherever the straight path
+   * would cut through it — the short way round, or always `sense`-wise (right hand about the axis) when given.
+   */
+  | { wrap: string; r: number; sense?: 1 | -1 };
+
+/**
+ * A line (tendon) pulled by a spool on a servo or stepper shaft and routed through guides to an anchor on a
+ * moving link. Orrery draws it, measures its length every frame (slack or stretch against what the spool has
+ * reeled in) and shades it by the tension the actuator puts into it.
+ */
+export interface Tendon {
+  id: string;
+  label?: string;
+  /** The servo or stepper (listed in mounts) whose shaft carries the spool. */
+  device: string;
+  /** Spool radius, mm: the line moves spool × device angle (radians). */
+  spool: number;
+  /** 1: the spool reels the line in as the device angle increases; −1: it pays it out. */
+  wind: 1 | -1;
+  /** From the spool to the anchor: the first and last entries are points, the last one is where the line is tied. */
+  path: TendonPoint[];
+}
+
 export interface Joint {
   id: string;
   type: 'revolute' | 'prismatic' | 'fixed';
@@ -71,6 +107,8 @@ export interface Joint {
   limits?: [number, number];
   home?: number;
   drive?: Drive;
+  /** The screw or pin the joint turns on (drawn in 3D and in section views). */
+  axle?: Axle;
 }
 
 export interface Mount {
@@ -99,6 +137,8 @@ export interface Assembly {
   links: Link[];
   joints: Joint[];
   mounts?: Mount[];
+  /** Lines from spools on actuators to the parts they pull. */
+  tendons?: Tendon[];
   hardware?: Hardware[];
   notes?: string[];
 }
@@ -180,6 +220,12 @@ export function validateAssembly(input: unknown): ValidationResult {
         errors.push(`${where}: "limits" must be [min, max] with min ≤ max`);
       if (j.home !== undefined && !isNum(j.home)) errors.push(`${where}: "home" must be a number`);
     } else if (j.drive) warnings.push(`${where}: a fixed joint ignores "drive"`);
+    if (j.axle !== undefined) {
+      const ax = j.axle as Partial<Axle> | null;
+      if (j.type !== 'revolute') errors.push(`${where}: only a revolute joint turns on an "axle"`);
+      if (!ax || !['M2', 'M3'].includes(ax.size as string) || !(isNum(ax.length) && ax.length > 0 && ax.length <= 300))
+        errors.push(`${where}: "axle" must be { "size": "M2" | "M3", "length": mm }`);
+    }
   });
 
   const roots = [...linkIds].filter((id) => !parentOf.has(id));
@@ -244,6 +290,37 @@ export function validateAssembly(input: unknown): ValidationResult {
       cur = byId.get(cur.drive.follow);
     }
   }
+
+  // tendons
+  const tendons = a.tendons ?? [];
+  if (!Array.isArray(tendons)) errors.push('"tendons" must be an array');
+  const tendonIds = new Set<string>();
+  (Array.isArray(tendons) ? tendons : []).forEach((t, i) => {
+    const where = `tendons[${i}]${t && typeof t.id === 'string' ? ` "${t.id}"` : ''}`;
+    if (!t || typeof t.id !== 'string' || !ID.test(t.id)) return errors.push(`${where}: "id" must start with a letter and use letters, digits, _ or -`);
+    if (tendonIds.has(t.id)) errors.push(`${where}: duplicate id`);
+    tendonIds.add(t.id);
+    const kind = mountDevices.get(t.device);
+    if (!kind) errors.push(`${where}: device "${t.device}" is not in "mounts"`);
+    else if (!ACTUATOR_KINDS.includes(kind)) errors.push(`${where}: a ${kind} cannot pull a tendon (use servo or stepper)`);
+    if (!(isNum(t.spool) && t.spool > 0 && t.spool <= 100)) errors.push(`${where}: "spool" must be a radius in mm (0–100)`);
+    if (t.wind !== 1 && t.wind !== -1) errors.push(`${where}: "wind" must be 1 or -1`);
+    if (!Array.isArray(t.path) || t.path.length < 1 || t.path.length > 64) return errors.push(`${where}: "path" must list 1–64 points`);
+    t.path.forEach((p, k) => {
+      const at = `${where} path[${k}]`;
+      if (p && typeof p === 'object' && 'wrap' in p) {
+        const wj = byId.get(p.wrap);
+        if (!wj || wj.type !== 'revolute') errors.push(`${at}: "wrap" must name a revolute joint`);
+        if (!(isNum(p.r) && p.r > 0 && p.r <= MAX_SIZE_MM)) errors.push(`${at}: "r" must be a radius in mm`);
+        if (p.sense !== undefined && p.sense !== 1 && p.sense !== -1) errors.push(`${at}: "sense" must be 1 or -1`);
+        if (k === 0 || k === t.path.length - 1) errors.push(`${at}: a wrap needs a point before and after it`);
+      } else if (p && typeof p === 'object' && 'link' in p) {
+        if (!linkIds.has(p.link)) errors.push(`${at}: link "${p.link}" does not exist`);
+        if (!isVec(p.at)) errors.push(`${at}: "at" must be [x, y, z] in the link frame`);
+        if (p.sheath && k === t.path.length - 1) errors.push(`${at}: a sheath must end at a later point`);
+      } else errors.push(`${at}: must be { "link", "at" } or { "wrap", "r" }`);
+    });
+  });
 
   const hardware = a.hardware ?? [];
   if (!Array.isArray(hardware) || hardware.some((h) => !h || typeof h.item !== 'string' || !isNum(h.qty) || h.qty <= 0))
@@ -392,6 +469,8 @@ Rules:
 - Drive a joint with a bench device: {"device":"servo1","from":[0,180],"to":[minDeg,maxDeg]} maps the servo angle to the joint. A stepper's shaft angle is in degrees. Coupled joints (tendons, gears, linkages) use {"follow":"otherJoint","ratio":r,"offset":o}.
 - Every driving device must be listed in "mounts" with its kind (servo = TowerPro SG90, 23.1 × 12.2 × 29 mm; stepper = NEMA 17 SY42STH38-1684A, 42.3 × 42.3 × 38 mm; a4988 = Pololu 1182 driver board, 20.3 × 15.2 mm) and a pose on the link that holds it. Leave room for these real sizes.
 - Make printed parts real: add "features" to a link — {"hole":{"d","position","axis","depth"}} (through unless depth is given), {"cut":{"box","position","rotation"}}, {"pocket":{"for":"sg90"|"nema17"|"a4988"|"b3f","position","rotation","clearance"}} (a cut-out that fits the real part, through along local Y), {"add":{"shape","position","rotation"}} (bosses, ribs). Use 3.4 mm holes for M3 screws, 2.4 mm for M2.
+- Give revolute joints the screw they turn on: "axle":{"size":"M2"|"M3","length":mm}, with matching clearance holes in both parts.
+- Tendons: a line from a printed spool on a servo/stepper shaft to the part it pulls, in "tendons" as {"id","device","spool":radiusMm,"wind":1|-1,"path":[{"link","at":[x,y,z],"sheath":true?} | {"wrap":"jointId","r":mm}, ...]}. The last point is the anchor. Pick the spool radius so spool × device angle equals the line length the joints take up (moment arm × joint angle summed over the joints it crosses); Orrery reports the slack or stretch.
 - List fasteners, bearings, tendon line, springs and other non-electronic parts in "hardware" as {"item","qty","note"} without inventing part numbers.
 - Put assumptions and assembly steps in "notes". Do not claim forces, torques or speeds you have not calculated.
 

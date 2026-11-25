@@ -125,6 +125,8 @@ export class LabSimulation {
   private slice = 0;
   /** "board.pin" whose net reaches only high-impedance inputs (servo SIG, A4988 STEP/DIR): an edge there changes no voltage elsewhere. */
   private readonly quiet = new Set<string>();
+  /** Logic edges each net has carried (for drawing signal activity on wires). */
+  private readonly edges = new Map<number, number>();
 
   /**
    * @param programs firmware per board id; a single program goes to the first board (older callers).
@@ -194,6 +196,8 @@ export class LabSimulation {
     this.findQuietPins();
     for (const b of this.boards) {
       b.board.onPin((pin, high, t) => {
+        const n = b.net.get(pin);
+        if (n !== undefined) this.edges.set(n, (this.edges.get(n) ?? 0) + 1);
         b.subscribers.get(pin)?.forEach((f) => f(high, t));
         if (!this.quiet.has(`${b.id}.${pin}`)) this.resolve(t);
       });
@@ -284,6 +288,36 @@ export class LabSimulation {
   builtinLed(boardId?: string): number {
     const b = boardId ? this.boards.find((x) => x.id === boardId) : this.boards[0];
     return b?.board.isHigh('D13') ? 1 : 0;
+  }
+
+  /**
+   * The net a pin ("servo1.SIG", "uno.D9") is on, as a wire would show it: its voltage against the reference
+   * ground and how many logic edges a board pin has put on it so far.
+   */
+  netState(ref: string): { volts: number; edges: number } {
+    let n: number;
+    try {
+      n = this.nets.net(ref);
+    } catch {
+      return { volts: 0, edges: 0 };
+    }
+    const edges = this.edges.get(n) ?? 0;
+    // quiet nets are not re-solved on every edge: their level is the driving pin's
+    const p = this.arduinoPinOn(ref);
+    if (p && this.quiet.has(`${p.b.id}.${p.pin}`)) {
+      const st = this.pinState(p);
+      if (st === PinState.High || st === PinState.Low) return { volts: st === PinState.High ? VCC : 0, edges };
+    }
+    return { volts: this.sol && this.gnd >= 0 ? this.sol.volts[n] - this.sol.volts[this.gnd] : 0, edges };
+  }
+
+  /**
+   * Torque an actuator applies to hold its mechanism against gravity, as a signed share of its stall (servo) or
+   * holding (stepper) torque: positive turns it towards larger angles.
+   */
+  actuatorEffort(device: string): number | undefined {
+    const a = this.loads?.actuators.get(device);
+    return a && a.limitKgfCm > 0 ? -a.torqueKgfCm / a.limitKgfCm : undefined;
   }
 
   snapshot(): LabSnapshot {

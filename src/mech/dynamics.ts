@@ -69,7 +69,7 @@ interface JointRt {
   frameQ: Quaternion;
   axis: Vector3;
   /** Joint degrees per device degree, the device's speed and torque at the joint. */
-  drive?: { device: string; f0: number; t0: number; ratio: number; maxVel: number; maxTorque: number };
+  drive?: { device: string; f0: number; t0: number; ratio: number; maxVel: number; maxTorque: number; deviceTorque: number };
 }
 
 export interface LoosePart {
@@ -227,7 +227,7 @@ export class Dynamics {
         const servo = mount?.kind !== 'stepper';
         const deviceTorque = (servo ? SPEC.sg90.stallTorqueKgfCm : SPEC.nema17.holdingTorqueKgfCm) * KGFCM;
         const deviceSpeed = servo ? 60 / SPEC.sg90.secPer60Deg : SPEC.nema17.maxStepsPerSecApprox * (360 / SPEC.nema17.stepsPerRev);
-        rt.drive = { device: j.drive.device, f0, t0, ratio, maxVel: Math.abs(ratio) * deviceSpeed * DEG, maxTorque: deviceTorque / Math.max(1e-6, Math.abs(ratio)) };
+        rt.drive = { device: j.drive.device, f0, t0, ratio, maxVel: Math.abs(ratio) * deviceSpeed * DEG, maxTorque: deviceTorque / Math.max(1e-6, Math.abs(ratio)), deviceTorque };
       }
       this.joints.push(rt);
     }
@@ -365,6 +365,82 @@ export class Dynamics {
     return undefined;
   }
 
+  /**
+   * How hard each actuator works right now, as a signed share of its stall (servo) or holding (stepper) torque,
+   * positive towards increasing device angle. Quasi-static: at each joint the actuator holds everything beyond it
+   * against gravity and against the contact forces other parts and objects put on it (from the solver's contact
+   * impulses in the last step), and joints it drives through a tendon or gear ("follow") count by virtual work —
+   * joint torque × joint degrees per device degree. Inertial torques while accelerating are left out.
+   */
+  actuatorEfforts(): Map<string, number> {
+    const parentOf = new Map<RAPIER_T.RigidBody, RAPIER_T.RigidBody>();
+    for (const rt of this.joints) parentOf.set(rt.child, rt.parent);
+    const within = (b: RAPIER_T.RigidBody | null | undefined, root: RAPIER_T.RigidBody) => {
+      for (let x = b ?? undefined, d = 0; x && d < 64; x = parentOf.get(x), d++) if (x === root) return true;
+      return false;
+    };
+    // external loads on every moving body: its weight at its centre of mass, and every contact force
+    const loads = new Map<RAPIER_T.RigidBody, { p: Vector3; f: Vector3; from: RAPIER_T.RigidBody | null }[]>();
+    const add = (b: RAPIER_T.RigidBody, l: { p: Vector3; f: Vector3; from: RAPIER_T.RigidBody | null }) => {
+      const list = loads.get(b);
+      if (list) list.push(l);
+      else loads.set(b, [l]);
+    };
+    for (const b of new Set(this.linkBody.values())) {
+      if (!b.isDynamic()) continue;
+      const c = b.worldCom();
+      add(b, { p: new Vector3(c.x, c.y, c.z), f: new Vector3(0, -G * b.mass(), 0), from: null });
+    }
+    const q = new Quaternion();
+    for (const h of this.mech.keys()) {
+      const c = this.world.getCollider(h);
+      const b = c.parent();
+      if (!b || !b.isDynamic()) continue;
+      this.world.contactPairsWith(c, (o) => {
+        this.world.contactPair(c, o, (m, flipped) => {
+          const n = m.normal();
+          for (let i = 0; i < m.numContacts(); i++) {
+            const imp = m.contactImpulse(i);
+            const lp = flipped ? m.localContactPoint2(i) : m.localContactPoint1(i);
+            if (!(imp > 0) || !lp) continue;
+            const t = c.translation();
+            const p = new Vector3(lp.x, lp.y, lp.z).applyQuaternion(q.copy(c.rotation() as Quaternion)).add(new Vector3(t.x, t.y, t.z));
+            // the normal points from the manifold's first shape to its second; each shape is pushed away from the other
+            const s = (flipped ? 1 : -1) * (imp / DT);
+            add(b, { p, f: new Vector3(n.x * s, n.y * s, n.z * s), from: o.parent() });
+          }
+        });
+      });
+    }
+    const byId = new Map(this.joints.map((rt) => [rt.joint.id, rt]));
+    const chain = (rt: JointRt, depth = 0): { d: NonNullable<JointRt['drive']>; c: number } | undefined => {
+      if (rt.drive) return { d: rt.drive, c: rt.drive.ratio };
+      const f = rt.joint.drive;
+      if (!f || !('follow' in f) || depth > 32) return undefined;
+      const src = byId.get(f.follow);
+      const up = src && chain(src, depth + 1);
+      return up && { d: up.d, c: up.c * (f.ratio ?? 1) };
+    };
+    const out = new Map<string, number>();
+    for (const rt of this.joints) {
+      const ch = chain(rt);
+      if (!ch) continue;
+      const pr = q.copy(rt.parent.rotation() as Quaternion);
+      const ax = rt.axis.clone().applyQuaternion(pr.clone().multiply(rt.frameQ));
+      const a1 = rt.rj.anchor1();
+      const pt = rt.parent.translation();
+      const o = new Vector3(a1.x, a1.y, a1.z).applyQuaternion(pr).add(new Vector3(pt.x, pt.y, pt.z));
+      let external = 0;
+      for (const [b, list] of loads) {
+        if (!within(b, rt.child)) continue;
+        for (const l of list) if (!within(l.from, rt.child)) external += l.p.clone().sub(o).cross(l.f).dot(ax);
+      }
+      // the actuator supplies the opposite of the external torque about the joint
+      out.set(ch.d.device, (out.get(ch.d.device) ?? 0) + (-external * ch.c) / ch.d.deviceTorque);
+    }
+    return out;
+  }
+
   /** World poses of every link (mm). */
   poses(): Map<string, Pose> {
     const out = new Map<string, Pose>();
@@ -379,6 +455,14 @@ export class Dynamics {
       m.decompose(p, q, new Vector3());
       out.set(id, { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w] });
     }
+    return out;
+  }
+
+  /** World matrices of every link frame (mm), like physics.linkFrames. */
+  frames(): Map<string, Matrix4> {
+    const out = new Map<string, Matrix4>();
+    const one = new Vector3(1, 1, 1);
+    for (const [id, p] of this.poses()) out.set(id, new Matrix4().compose(new Vector3(...p.p), new Quaternion(...p.q), one));
     return out;
   }
 
