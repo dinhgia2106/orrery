@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-mcp/
+bench/runs/
 *.log
 .DS_Store
 *.tsbuildinfo

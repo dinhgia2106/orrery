@@ -13,7 +13,9 @@
     "build:examples": "node scripts/build-examples.mjs",
     "compiler": "node scripts/compile-server.mjs",
     "build:mcp": "vite build --config vite.mcp.config.ts",
-    "mcp": "node dist-mcp/server.mjs"
+    "mcp": "node dist-mcp/server.mjs",
+    "bench": "vite-node --script bench/run.ts",
+    "build:bench-solutions": "node scripts/build-bench-solutions.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

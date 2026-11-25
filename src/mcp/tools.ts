@@ -253,7 +253,7 @@ interface BoardBuild {
 }
 
 /** Firmware for every board: the template's prebuilt .hex when the sketch is unchanged, else compiled (cached by sketch). */
-async function buildAll(project: Project, ctx: ToolContext): Promise<{ firmware: Record<string, string>; builds: Record<string, BoardBuild>; ok: boolean }> {
+export async function buildAll(project: Project, ctx: ToolContext): Promise<{ firmware: Record<string, string>; builds: Record<string, BoardBuild>; ok: boolean }> {
   const firmware: Record<string, string> = {};
   const builds: Record<string, BoardBuild> = {};
   let ok = true;

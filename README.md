@@ -123,6 +123,38 @@ Other clients take the same command in their MCP settings, e.g. `{"mcpServers": 
 
 The loop the server suggests: guide → template or new project → check → simulate with inputs that exercise the design → fix → share. `ok: true` only means nothing is broken; the agent still has to compare the samples with what was asked.
 
+### Benchmark: can a model design a working build?
+
+`bench/` asks models to build things from a sentence and lets the simulator grade them. Each task is a description ("a potentiometer steers an SG90 from 0° to 180°", "lift a 250 g weight by 45° with an SG90 without passing 80 % of its stall torque"). The model works with the MCP tools above until it calls `submit`. The grader then runs the submitted bench itself, with inputs the model never sees (button presses, pot positions, serial lines), and measures what happened: LED states, servo and stepper angles, serial output, joint angles and actuator loads. A design passes only if the bench is also clean: no ignored wires, no error checks, no clashes, no overloads.
+
+| Task | What the grader measures |
+|---|---|
+| `blink-2hz` | L LED half periods 250 ± 15 ms |
+| `button-toggle-led` | LED state after each of three presses of a bouncing button; series resistor (over-current is an error) |
+| `pot-servo` | servo at both pot ends (≤ 5° / ≥ 175°, either direction) and at mid-travel (90 ± 5°) |
+| `serial-pong` | serial output is exactly `ready`, `pong`, `pong` for `ping`, `hello`, `ping` |
+| `stepper-one-rev` | final angle 360 ± 1.8°, stopped, driver still enabled, no lost steps, VMOT capacitor present |
+| `two-board-relay` | the board without the button toggles its L LED per press, over serial |
+| `arm-lift` | 100 × 10 × 10 mm PLA bar hinged at one end: horizontal, then ≥ 85° up, then horizontal again |
+| `heavy-lift` | 250 g at 90 ± 2 mm from the hinge raised 45 ± 3°, SG90 peak load < 80 % of stall |
+
+Every task has a reference solution in `bench/solutions/`, and the tests check that each grader passes it and fails specific wrong answers (the 1 Hz Blink, an LED with no resistor, a missing TX→RX wire, a direct drive that overloads the servo, …).
+
+```bash
+npm run bench -- --list
+npm run bench -- --model vertex:gemini-2.5-pro --model openai:gpt-5 --repeat 3
+npm run bench -- --model anthropic:claude-sonnet-4-5 --task arm-lift --task heavy-lift
+```
+
+| Provider | Model name | Credentials (environment only) |
+|---|---|---|
+| `vertex:` | Gemini on Vertex AI | `VERTEX_API_KEY`, or `GOOGLE_APPLICATION_CREDENTIALS` (service-account key file) or `VERTEX_ACCESS_TOKEN`; `VERTEX_PROJECT` / `VERTEX_LOCATION` (default `global`) |
+| `gemini:` | Gemini on Google AI Studio | `GEMINI_API_KEY` |
+| `openai:` | OpenAI, or any OpenAI-compatible endpoint (Qwen on DashScope or OpenRouter, Ollama, vLLM) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` |
+| `anthropic:` | Claude | `ANTHROPIC_API_KEY` |
+
+Sketches compile with the arduino-cli on your machine. Each run writes `bench/runs/<time>/` (git-ignored): one JSON per episode with the transcript, the submitted project and every grading criterion, plus `summary.md` with pass rate, simulations per passing design, turns and tokens per model. Provider failures (missing key, network, HTTP errors) are listed but not scored. No results are published yet.
+
 ## Real parts, with part numbers
 
 Every device is a specific product you can buy; its model uses that product's datasheet (sources are cited in [`src/sim/catalog.ts`](src/sim/catalog.ts)), and the BOM panel lists them with links and exports CSV.
@@ -165,6 +197,7 @@ npm test                 # simulator, circuit and wiring-mistake tests with real
 npm run build            # static site in dist/
 npm run build:examples   # recompile examples/*.ino into public/examples/*.hex
 npm run build:mcp        # MCP server for AI agents → dist-mcp/server.mjs
+npm run bench -- --list  # design benchmark (see above)
 ```
 
 ## How it works
@@ -197,6 +230,7 @@ src/sim/catalog.ts   real parts: MPNs, links and the datasheet figures the model
 src/Scene.tsx        3D bench in millimetres
 scripts/compile-server.mjs   local compile helper;  arduino-cli.mjs  the compile step it shares with the MCP server
 src/mcp/             MCP server: tools.ts (the tools), server.ts (stdio)
+bench/               benchmark: tasks.ts (tasks + graders), agent.ts (episode loop), providers.ts, run.ts (CLI), solutions/
 examples/            template sketches;  public/examples/  their prebuilt .hex
 ```
 
