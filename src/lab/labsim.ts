@@ -279,6 +279,19 @@ export class LabSimulation {
     return 0;
   }
 
+  /** The shaft angle of an actuator device (servo horn, or a stepper through its driver); undefined for anything else. */
+  deviceAngle(device: string): number | undefined {
+    const s = this.servos.get(device);
+    if (s) return s.angle;
+    // a stepper no driver turns stays at 0°
+    return this.project.devices.some((d) => d.id === device && d.kind === 'stepper') ? this.motorAngle(device) : undefined;
+  }
+
+  /** Gravity load on each actuator in the current pose (empty until setMechanics has masses). */
+  actuatorLoads(): ActuatorLoad[] {
+    return this.loads ? [...this.loads.actuators.values()] : [];
+  }
+
   ledLevel(id: string): number {
     const l = this.leds.get(id);
     return l ? Math.min(1, this.ledAvgMa(l) / 10) : 0; // relative to 10 mA, the WP7113ID test current

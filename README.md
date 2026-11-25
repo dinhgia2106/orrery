@@ -82,6 +82,23 @@ It listens on 127.0.0.1 only, accepts requests only from the Orrery pages (local
 | Servo driven by `analogWrite()`, STEP pulses shorter than 1 µs, DIR set < 200 ns before STEP, steps faster than the motor follows | warning; lost steps |
 | Button bounce (B3F ≤ 5 ms) | firmware that does not debounce counts several presses |
 
+### Headless runs
+
+`runProject(project, options)` in `src/headless/run.ts` runs a project with no browser and returns one JSON report. Scripts, tests and (next) an MCP server for coding agents use it to judge a design without the 3D view.
+
+```ts
+const report = await runProject(project, {
+  seconds: 3,
+  firmware: { uno: hexText },                     // Intel HEX text or flash words, per board id
+  inputs: [{ t: 0.5, pot: 'pot1', value: 1 }, { t: 1, press: 'button1', holdMs: 50 }],
+  mechanics: 'static',                            // 'off' | 'static' (gravity loads, clash checks) | 'dynamic' (Rapier)
+});
+report.ok;        // false on error checks, overlapping parts or an actuator loaded past its stall/holding torque
+report.problems;  // one line per reason
+```
+
+The report holds every check with the time it first appeared, serial output per board, device states and joint angles sampled every 50 ms (configurable), each actuator's peak load as a share of its limit, clashes, tendon tension and slack, and, with dynamics, how far each joint lagged its servo, which parts touched and where dropped objects ended up. Warnings are reported but do not make `ok` false.
+
 ## Real parts, with part numbers
 
 Every device is a specific product you can buy; its model uses that product's datasheet (sources are cited in [`src/sim/catalog.ts`](src/sim/catalog.ts)), and the BOM panel lists them with links and exports CSV.
@@ -142,6 +159,7 @@ src/lab/devices.ts   shelf parts: real pins, internal links, 2D pin positions
 src/lab/project.ts   project file (devices, wires, code), templates, share links
 src/lab/circuit.ts   nets from wires; DC solver (modified nodal analysis)
 src/lab/labsim.ts    firmware + circuit + part models; wiring checks
+src/headless/run.ts  runProject: a whole run without a browser, as one JSON report
 src/lab/Wiring.tsx   wiring canvas;  CodeEditor.tsx  sketch editor;  compiler.ts  helper client
 src/mech/assembly.ts Orrery Assembly Format: types, validator, kinematics, AI prompt (spec: docs/assembly-format.md)
 src/mech/solid.ts    printable solids (manifold), STL;  drawing.ts  A4 drawings;  fabricate.ts  fabrication ZIP

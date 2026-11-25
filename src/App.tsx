@@ -193,8 +193,7 @@ export default function App() {
     void loadRapier().then((lib) => {
       if (!alive) return;
       const s = sim.current;
-      const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-      const start = jointValues(asm, (d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined));
+      const start = jointValues(asm, (d) => s?.deviceAngle(d));
       dynRef.current?.dispose();
       dynRef.current = new Dynamics(lib, asm, massProps, start);
       setDynGen((g) => g + 1);
@@ -222,8 +221,7 @@ export default function App() {
     const s = sim.current;
     if (!asm) return;
     setChecking(true);
-    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-    const values = jointValues(asm, (d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined));
+    const values = jointValues(asm, (d) => s?.deviceAngle(d));
     setClashes(await interference(asm, values));
     setChecking(false);
   };
@@ -575,8 +573,7 @@ export default function App() {
       if (!asm?.tendons?.length) return [];
       const s = sim.current;
       const d = dynRef.current;
-      const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-      const angle = (dev: string) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined);
+      const angle = (dev: string) => s?.deviceAngle(dev);
       const efforts = d?.actuatorEfforts();
       return readTendons(asm, d ? d.frames() : linkFrames(asm, jointValues(asm, angle)), angle, (dev) => (efforts ? efforts.get(dev) : s?.actuatorEffort(dev)));
     },
@@ -598,8 +595,7 @@ export default function App() {
       drop,
       tracking: () => {
         const s = sim.current;
-        const stepper = new Set((asm?.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-        return dynRef.current?.tracking((d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined)) ?? [];
+        return dynRef.current?.tracking((d) => s?.deviceAngle(d)) ?? [];
       },
       touching: () => dynRef.current?.touching() ?? [],
       restOverlaps: () => dynRef.current?.restOverlaps() ?? 0,

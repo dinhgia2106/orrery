@@ -561,15 +561,7 @@ function Wire({ from, to, color, lift = 18, level, flow = 0 }: { from: (t: numbe
 
 /** Link frames on the bench (mm) as they are drawn: from the dynamics when it runs, else from the joint values. */
 function benchFrames(asm: Assembly, sim: SimRef, dyn?: MutableRefObject<Dynamics | null>): Map<string, Matrix4> {
-  return dyn?.current ? dyn.current.frames() : linkFrames(asm, jointValues(asm, (dev) => deviceAngle(asm, sim, dev)));
-}
-
-function deviceAngle(asm: Assembly, sim: SimRef, dev: string): number | undefined {
-  const s = sim.current;
-  if (!s) return undefined;
-  const servo = s.servos.get(dev);
-  if (servo) return servo.angle;
-  return asm.mounts?.some((m) => m.device === dev && m.kind === 'stepper') ? s.motorAngle(dev) : undefined;
+  return dyn?.current ? dyn.current.frames() : linkFrames(asm, jointValues(asm, (dev) => sim.current?.deviceAngle(dev)));
 }
 
 /** Link frames for the current frame, computed once per frame however many parts ask. */
@@ -619,7 +611,7 @@ function Tendons({ asm, sim, dyn, frames }: { asm: Assembly; sim: SimRef; dyn?: 
     const efforts = dyn?.current ? dyn.current.actuatorEfforts() : null;
     models.forEach((m, i) => {
       const dev = m.tendon.device;
-      const st = m.at(f, deviceAngle(asm, sim, dev) ?? m.homeAngle);
+      const st = m.at(f, sim.current?.deviceAngle(dev) ?? m.homeAngle);
       // sheathed runs are drawn bent, leaving and entering along the free line on either side
       const pts: Vector3[] = [];
       const u: number[] = [];
@@ -909,8 +901,7 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
     const now = s ? s.time : (last.current ?? 0) + delta;
     const dt = last.current === null ? 0 : Math.min(0.05, Math.max(0, now - last.current));
     last.current = now;
-    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-    d.step(dt, (dev) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined));
+    d.step(dt, (dev) => s?.deviceAngle(dev));
     for (const [id, pose] of d.poses()) {
       const g = groups.current.get(id);
       if (!g) continue;
