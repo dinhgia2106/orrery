@@ -1,11 +1,10 @@
-// The 3D lab: build the mechanism part by part — shapes in mm, joints, drives from the bench, holes and
-// pockets that fit real parts — and export STL, drawings and a fabrication package to make it for real.
+// The 3D lab panels: parts tree, selected part/joint/feature/mount inspector, physics & dynamics, and
+// fabrication/3D print exports — split into focused panels for the left and right workbench sidebars.
 import { useState, type ReactNode } from 'react';
-import type { Device } from '../lab/project';
+import type { Device, Project } from '../lab/project';
 import { validateAssembly, type Assembly, type Feature, type Joint, type Link, type PocketFor, type Vec3 } from './assembly';
 import { addChild, driveWith, mountDevice, newAssembly, parentJoint, patchJoint, patchLink, removeLink, rootLink, setFeatures, SHAPES, unmount } from './edit';
 import { fabricationPackage, madeHere, partStl, partSvg } from './fabricate';
-import type { Project } from '../lab/project';
 import { DENSITY, type ActuatorLoad, type Clash, type MassProps } from './physics';
 import { CLEARANCE_HOLE_MM, DEFAULT_CLEARANCE_MM } from './solid';
 import type { TendonReading } from './tendon';
@@ -31,15 +30,6 @@ export interface PhysicsView {
   clashes: Clash[] | null;
   checking: boolean;
   onCheck: () => void;
-}
-
-interface Props {
-  project: Project;
-  onAssembly: (asm: Assembly | undefined) => void;
-  selected: string | null;
-  onSelect: (id: string | null) => void;
-  download: (name: string, data: BlobPart, type: string) => void;
-  physics: PhysicsView;
 }
 
 const MATERIALS: NonNullable<Link['material']>[] = ['PLA', 'PETG', 'TPU', 'ABS', 'resin', 'aluminium', 'steel', 'acrylic', 'wood', 'other'];
@@ -72,39 +62,62 @@ function Vec({ label, value, onChange, step }: { label: string; value: Vec3 | un
   );
 }
 
-function Block({ title, children, right }: { title: string; children: ReactNode; right?: ReactNode }) {
+function CollapsibleBlock({ title, right, defaultOpen = true, children }: { title: string; right?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="lab-block">
       <div className="lab-block-head mono">
-        <span>{title}</span>
-        {right}
+        <button type="button" className="lab-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span>{title}</span>
+        </button>
+        {right && <span className="lab-block-right">{right}</span>}
       </div>
-      {children}
+      {open && children}
     </div>
   );
 }
 
-export default function LabPanel({ project, onAssembly, selected, onSelect, download, physics }: Props) {
+/** Left sidebar view when in 3D Lab: assembly tree, add-primitive row, and import/export actions. */
+export function LabPartsPanel({
+  project,
+  onAssembly,
+  selected,
+  onSelect,
+  download,
+  onImportFile,
+  onOpenAi,
+}: {
+  project: Project;
+  onAssembly: (asm: Assembly | undefined) => void;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  download: (name: string, data: BlobPart, type: string) => void;
+  onImportFile: (file: File) => void;
+  onOpenAi: () => void;
+}) {
   const asm = project.assembly;
-  const [busy, setBusy] = useState('');
-  if (!asm)
+  if (!asm) {
     return (
-      <div className="lab-panel">
-        <div className="lab-title mono">3D LAB</div>
-        <p className="small muted">Build the mechanism here: parts in millimetres, joints driven by your bench servos and steppers, holes and pockets that fit the real parts — then export STL and drawings to make it.</p>
+      <div className="lab-stack">
+        <p className="small muted">Build parts in mm, drive joints from the bench, or import an assembly / STL.</p>
         <button className="primary wide" onClick={() => (onAssembly(newAssembly(project.name)), onSelect('base'))}>
           Start a mechanism
         </button>
+        <div className="file-row">
+          <label className="file-btn">
+            Import
+            <input type="file" accept=".json,.stl" onChange={(e) => e.target.files?.[0] && onImportFile(e.target.files[0])} />
+          </label>
+          <button onClick={onOpenAi}>AI / paste</button>
+        </div>
       </div>
     );
+  }
 
-  const check = validateAssembly(asm);
+  const root = rootLink(asm);
   const link = asm.links.find((l) => l.id === selected) ?? null;
-  const joint = link ? parentJoint(asm, link.id) : undefined;
-  const set = (next: Assembly) => onAssembly(next);
-  const actuators = project.devices.filter((d) => d.kind === 'servo' || d.kind === 'stepper');
-  const mountable = project.devices.filter((d) => d.kind !== 'uno' && d.kind !== 'psu');
-
+  const missingMounts = (asm.mounts ?? []).filter((m) => !project.devices.some((d) => d.id === m.device));
   const children = (id: string, depth: number): ReactNode[] =>
     asm.joints
       .filter((j) => j.parent === id)
@@ -112,7 +125,88 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
         <TreeRow key={j.child} l={asm.links.find((l) => l.id === j.child)!} depth={depth} j={j} selected={selected} onSelect={onSelect} />,
         ...children(j.child, depth + 1),
       ]);
+
+  return (
+    <div className="lab-stack">
+      <div className="lab-title mono">
+        <span>MECH</span>
+        <input className="lab-name" value={asm.name} onChange={(e) => onAssembly({ ...asm, name: e.target.value })} aria-label="Mechanism name" />
+      </div>
+      <div className="lab-block">
+        <div className="lab-block-head mono">
+          <span>PARTS</span>
+          <span className="muted">{asm.links.length}</span>
+        </div>
+        <ul className="tree tree-tall">
+          <TreeRow l={root} depth={0} selected={selected} onSelect={onSelect} />
+          {children(root.id, 1)}
+        </ul>
+        <div className="lab-row">
+          {(Object.keys(SHAPES) as (keyof typeof SHAPES)[]).map((k) => (
+            <button key={k} onClick={() => { const r = addChild(asm, link?.id ?? root.id, k); onAssembly(r.asm); onSelect(r.id); }}>
+              + {k}
+            </button>
+          ))}
+        </div>
+      </div>
+      {missingMounts.length > 0 && <p className="small warn-text">Missing on the bench: {missingMounts.map((m) => m.device).join(', ')}</p>}
+      <div className="file-row">
+        <label className="file-btn">
+          Import
+          <input type="file" accept=".json,.stl" onChange={(e) => e.target.files?.[0] && onImportFile(e.target.files[0])} />
+        </label>
+        <button onClick={onOpenAi}>AI / paste</button>
+        <button onClick={() => download(`${asm.name.replace(/[^\w-]+/g, '_')}.assembly.json`, JSON.stringify(asm, null, 2), 'application/json')}>Export</button>
+        <button onClick={() => { onAssembly(undefined); onSelect(null); }}>Remove</button>
+      </div>
+    </div>
+  );
+}
+
+/** Right sidebar Inspect tab when in 3D Lab: edit selected link, joint, features, and mounted devices. */
+export function LabPartInspector({
+  project,
+  onAssembly,
+  selected,
+  onSelect,
+  download,
+  massProps,
+  totalMassG,
+}: {
+  project: Project;
+  onAssembly: (asm: Assembly | undefined) => void;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  download: (name: string, data: BlobPart, type: string) => void;
+  massProps: Map<string, MassProps> | null;
+  totalMassG: number | null;
+}) {
+  const [busy, setBusy] = useState('');
+  const asm = project.assembly;
+  if (!asm) return <p className="muted small">No mechanism on the bench yet.</p>;
+
+  const link = asm.links.find((l) => l.id === selected) ?? null;
+  if (!link) {
+    return (
+      <div className="lab-stack">
+        <div className="card mech">
+          <strong>{asm.name}</strong>
+          <span className="mono muted small">
+            {asm.links.length} links · {asm.joints.length} joints · {(asm.mounts ?? []).length} mounted
+            {totalMassG !== null ? ` · ${totalMassG.toFixed(0)} g` : ''}
+          </span>
+        </div>
+        <p className="muted small">Click any part in 3D or the Parts tree to edit its shape, joint, features, or mounts.</p>
+      </div>
+    );
+  }
+
   const root = rootLink(asm);
+  const joint = parentJoint(asm, link.id);
+  const actuators = project.devices.filter((d) => d.kind === 'servo' || d.kind === 'stepper');
+  const mountable = project.devices.filter((d) => d.kind !== 'uno' && d.kind !== 'psu');
+  const mountedHere = (asm.mounts ?? []).filter((m) => m.link === link.id);
+  const set = (next: Assembly) => onAssembly(next);
 
   const run = async (label: string, f: () => Promise<void>) => {
     setBusy(label);
@@ -124,130 +218,215 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
   };
 
   return (
-    <div className="lab-panel">
-      <div className="lab-title mono">
-        3D LAB · <input className="lab-name" value={asm.name} onChange={(e) => set({ ...asm, name: e.target.value })} />
-      </div>
-      <Block title="PARTS" right={<span className="muted">{asm.links.length}</span>}>
-        <ul className="tree">
-          <TreeRow l={root} depth={0} selected={selected} onSelect={onSelect} />
-          {children(root.id, 1)}
-        </ul>
+    <div key={link.id} className="lab-stack">
+      <CollapsibleBlock
+        title={`PART · ${link.id}`}
+        defaultOpen
+        right={link.id !== root.id ? <button className="link-danger" onClick={() => (set(removeLink(asm, link.id)), onSelect(null))}>remove</button> : undefined}
+      >
+        <input className="lab-text" value={link.label ?? ''} placeholder="what it is" onChange={(e) => set(patchLink(asm, link.id, { label: e.target.value }))} />
+        <ShapeEditor link={link} onChange={(shape) => set(patchLink(asm, link.id, { shape }))} />
+        <Vec label="offset" value={link.position} onChange={(position) => set(patchLink(asm, link.id, { position }))} />
+        <Vec label="rot °" value={link.rotation} step={5} onChange={(rotation) => set(patchLink(asm, link.id, { rotation }))} />
         <div className="lab-row">
-          {(Object.keys(SHAPES) as (keyof typeof SHAPES)[]).map((k) => (
-            <button key={k} onClick={() => { const r = addChild(asm, link?.id ?? root.id, k); set(r.asm); onSelect(r.id); }}>
-              + {k}
-            </button>
-          ))}
+          <select value={link.make ?? 'print'} onChange={(e) => set(patchLink(asm, link.id, { make: e.target.value as Link['make'] }))}>
+            {MAKES.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <select value={link.material ?? 'PLA'} onChange={(e) => set(patchLink(asm, link.id, { material: e.target.value as Link['material'] }))}>
+            {MATERIALS.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <input type="color" value={link.color ?? '#d9dee6'} onChange={(e) => set(patchLink(asm, link.id, { color: e.target.value }))} />
+          <Num label="opacity" value={link.opacity ?? 1} step={0.1} min={0} onChange={(o) => set(patchLink(asm, link.id, { opacity: Math.min(1, Math.max(0.05, o)) }))} />
         </div>
-      </Block>
+        <MassLine link={link} mp={massProps?.get(link.id)} onMass={(massG) => set(patchLink(asm, link.id, { massG }))} />
+      </CollapsibleBlock>
 
-      {link && (
-        <>
-          <Block
-            title={`PART · ${link.id}`}
-            right={link.id !== root.id ? <button className="link-danger" onClick={() => (set(removeLink(asm, link.id)), onSelect(null))}>remove</button> : undefined}
-          >
-            <input className="lab-text" value={link.label ?? ''} placeholder="what it is" onChange={(e) => set(patchLink(asm, link.id, { label: e.target.value }))} />
-            <ShapeEditor link={link} onChange={(shape) => set(patchLink(asm, link.id, { shape }))} />
-            <Vec label="offset" value={link.position} onChange={(position) => set(patchLink(asm, link.id, { position }))} />
-            <Vec label="rot °" value={link.rotation} step={5} onChange={(rotation) => set(patchLink(asm, link.id, { rotation }))} />
-            <div className="lab-row">
-              <select value={link.make ?? 'print'} onChange={(e) => set(patchLink(asm, link.id, { make: e.target.value as Link['make'] }))}>
-                {MAKES.map((m) => <option key={m}>{m}</option>)}
+      {joint && (
+        <CollapsibleBlock title={`JOINT · ${joint.id}`} defaultOpen={joint.type !== 'fixed'} right={<span className="muted">{joint.type}</span>}>
+          <div className="lab-row">
+            <select value={joint.type} onChange={(e) => set(patchJoint(asm, joint.id, { type: e.target.value as Joint['type'], axis: joint.axis ?? [0, 1, 0] }))}>
+              <option value="fixed">fixed</option>
+              <option value="revolute">revolute (°)</option>
+              <option value="prismatic">prismatic (mm)</option>
+            </select>
+            {joint.type !== 'fixed' && (
+              <select value={axisName(joint.axis)} onChange={(e) => set(patchJoint(asm, joint.id, { axis: AXES[e.target.value] }))}>
+                {Object.keys(AXES).map((a) => <option key={a}>{a}</option>)}
               </select>
-              <select value={link.material ?? 'PLA'} onChange={(e) => set(patchLink(asm, link.id, { material: e.target.value as Link['material'] }))}>
-                {MATERIALS.map((m) => <option key={m}>{m}</option>)}
-              </select>
-              <input type="color" value={link.color ?? '#d9dee6'} onChange={(e) => set(patchLink(asm, link.id, { color: e.target.value }))} />
-              <Num label="opacity" value={link.opacity ?? 1} step={0.1} min={0} onChange={(o) => set(patchLink(asm, link.id, { opacity: Math.min(1, Math.max(0.05, o)) }))} />
-            </div>
-            <MassLine link={link} mp={physics.massProps?.get(link.id)} onMass={(massG) => set(patchLink(asm, link.id, { massG }))} />
-          </Block>
-
-          {joint && (
-            <Block title={`JOINT · ${joint.id}`}>
+            )}
+          </div>
+          <Vec label="at" value={joint.position} onChange={(position) => set(patchJoint(asm, joint.id, { position }))} />
+          <Vec label="rot °" value={joint.rotation} step={5} onChange={(rotation) => set(patchJoint(asm, joint.id, { rotation }))} />
+          {joint.type !== 'fixed' && (
+            <>
               <div className="lab-row">
-                <select value={joint.type} onChange={(e) => set(patchJoint(asm, joint.id, { type: e.target.value as Joint['type'], axis: joint.axis ?? [0, 1, 0] }))}>
-                  <option value="fixed">fixed</option>
-                  <option value="revolute">revolute (°)</option>
-                  <option value="prismatic">prismatic (mm)</option>
-                </select>
-                {joint.type !== 'fixed' && (
-                  <select value={axisName(joint.axis)} onChange={(e) => set(patchJoint(asm, joint.id, { axis: AXES[e.target.value] }))}>
-                    {Object.keys(AXES).map((a) => <option key={a}>{a}</option>)}
-                  </select>
-                )}
+                <Num label="min" value={joint.limits?.[0] ?? -90} onChange={(v) => set(patchJoint(asm, joint.id, { limits: [v, joint.limits?.[1] ?? 90] }))} />
+                <Num label="max" value={joint.limits?.[1] ?? 90} onChange={(v) => set(patchJoint(asm, joint.id, { limits: [joint.limits?.[0] ?? -90, v] }))} />
+                <button onClick={() => set(patchJoint(asm, joint.id, { limits: undefined }))}>free</button>
               </div>
-              <Vec label="at" value={joint.position} onChange={(position) => set(patchJoint(asm, joint.id, { position }))} />
-              <Vec label="rot °" value={joint.rotation} step={5} onChange={(rotation) => set(patchJoint(asm, joint.id, { rotation }))} />
-              {joint.type !== 'fixed' && (
-                <>
-                  <div className="lab-row">
-                    <Num label="min" value={joint.limits?.[0] ?? -90} onChange={(v) => set(patchJoint(asm, joint.id, { limits: [v, joint.limits?.[1] ?? 90] }))} />
-                    <Num label="max" value={joint.limits?.[1] ?? 90} onChange={(v) => set(patchJoint(asm, joint.id, { limits: [joint.limits?.[0] ?? -90, v] }))} />
-                    <button onClick={() => set(patchJoint(asm, joint.id, { limits: undefined }))}>free</button>
-                  </div>
-                  <DriveEditor asm={asm} joint={joint} actuators={actuators} onChange={set} />
-                </>
-              )}
-            </Block>
+              <DriveEditor asm={asm} joint={joint} actuators={actuators} onChange={set} />
+            </>
           )}
-
-          <Block title="FEATURES (holes, pockets, cuts, bosses)">
-            <FeatureEditor features={link.features ?? []} onChange={(f) => set(setFeatures(asm, link.id, f))} disabled={'mesh' in link.shape} />
-          </Block>
-
-          <Block title="MOUNTED HERE">
-            {(asm.mounts ?? []).filter((m) => m.link === link.id).map((m) => (
-              <div key={m.device} className="mount-row">
-                <span className="ref mono">{m.device}</span>
-                <Vec label="at" value={m.position} onChange={(position) => set({ ...asm, mounts: asm.mounts!.map((x) => (x.device === m.device ? { ...x, position } : x)) })} />
-                <Vec label="rot °" value={m.rotation} step={15} onChange={(rotation) => set({ ...asm, mounts: asm.mounts!.map((x) => (x.device === m.device ? { ...x, rotation } : x)) })} />
-                <button className="link-danger" onClick={() => set(unmount(asm, m.device))}>unmount</button>
-              </div>
-            ))}
-            <MountPicker devices={mountable} onPick={(d) => set(mountDevice(asm, d.id, d.kind, link.id))} />
-          </Block>
-
-          {madeHere(link) && (
-            <div className="lab-row">
-              <button disabled={!!busy} onClick={() => run('stl', async () => { const stl = await partStl(link); if (stl) download(`${link.id}.stl`, stl, 'model/stl'); })}>
-                {busy === 'stl' ? '…' : 'STL'}
-              </button>
-              <button disabled={!!busy || 'mesh' in link.shape} onClick={() => run('svg', async () => { const svg = await partSvg(link, asm); if (svg) download(`${link.id}-drawing.svg`, svg, 'image/svg+xml'); })}>
-                {busy === 'svg' ? '…' : 'Drawing'}
-              </button>
-            </div>
-          )}
-        </>
+        </CollapsibleBlock>
       )}
 
-      <PhysicsBlock physics={physics} asm={asm} onSelect={onSelect} />
+      <CollapsibleBlock title="FEATURES" defaultOpen={false} right={<span className="muted">{link.features?.length ?? 0}</span>}>
+        <FeatureEditor features={link.features ?? []} onChange={(f) => set(setFeatures(asm, link.id, f))} disabled={'mesh' in link.shape} />
+      </CollapsibleBlock>
 
-      <Block title="MAKE IT">
-        {!check.ok && (
-          <ul className="asm-errors mono small">
-            {check.errors.slice(0, 6).map((e) => <li key={e}>{e}</li>)}
-          </ul>
+      <CollapsibleBlock title="MOUNTED HERE" defaultOpen={false} right={<span className="muted">{mountedHere.length}</span>}>
+        {mountedHere.map((m) => (
+          <div key={m.device} className="mount-row">
+            <span className="ref mono">{m.device}</span>
+            <Vec label="at" value={m.position} onChange={(position) => set({ ...asm, mounts: asm.mounts!.map((x) => (x.device === m.device ? { ...x, position } : x)) })} />
+            <Vec label="rot °" value={m.rotation} step={15} onChange={(rotation) => set({ ...asm, mounts: asm.mounts!.map((x) => (x.device === m.device ? { ...x, rotation } : x)) })} />
+            <button className="link-danger" onClick={() => set(unmount(asm, m.device))}>unmount</button>
+          </div>
+        ))}
+        <MountPicker devices={mountable} onPick={(d) => set(mountDevice(asm, d.id, d.kind, link.id))} />
+      </CollapsibleBlock>
+
+      {madeHere(link) && (
+        <div className="lab-row">
+          <button disabled={!!busy} onClick={() => run('stl', async () => { const stl = await partStl(link); if (stl) download(`${link.id}.stl`, stl, 'model/stl'); })}>
+            {busy === 'stl' ? '…' : 'Export STL'}
+          </button>
+          <button disabled={!!busy || 'mesh' in link.shape} onClick={() => run('svg', async () => { const svg = await partSvg(link, asm); if (svg) download(`${link.id}-drawing.svg`, svg, 'image/svg+xml'); })}>
+            {busy === 'svg' ? '…' : 'Export Drawing'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Right sidebar Physics tab: gravity loads, collisions, tendons, and Rapier rigid-body dynamics. */
+export function LabPhysicsPanel({ physics, asm, onSelect }: { physics: PhysicsView; asm: Assembly; onSelect: (id: string) => void }) {
+  const [showAllLoads, setShowAllLoads] = useState(false);
+  const unknown = physics.massProps ? [...physics.massProps.entries()].filter(([, m]) => m.how === 'unknown').map(([id]) => id) : [];
+  const sorted = [...physics.actuators].sort((a, b) => Math.abs(b.torqueKgfCm) / b.limitKgfCm - Math.abs(a.torqueKgfCm) / a.limitKgfCm);
+  const visibleLoads = showAllLoads ? sorted : sorted.slice(0, 6);
+  const tendons = (asm.tendons?.length ?? 0) > 0 ? physics.tendons() : [];
+  const slackCount = tendons.filter((t) => Math.abs(t.slackMm) > 1).length;
+  const maxTension = tendons.reduce((m, t) => Math.max(m, t.tensionN), 0);
+
+  return (
+    <div className="lab-stack">
+      <div className="lab-block">
+        <div className="lab-block-head mono">
+          <span>GRAVITY &amp; STATICS</span>
+          <span className="muted">{physics.totalMassG !== null ? `${physics.totalMassG.toFixed(0)} g` : '…'}</span>
+        </div>
+        {unknown.length > 0 && <p className="small warn-text">No mass for {unknown.join(', ')} — set massG.</p>}
+        {sorted.length > 0 ? (
+          <>
+            <table className="loads mono">
+              <tbody>
+                {visibleLoads.map((a) => {
+                  const pct = Math.abs(a.torqueKgfCm) / a.limitKgfCm;
+                  return (
+                    <tr key={a.device} className={pct >= 1 ? 'over' : pct > 0.7 ? 'high' : ''} title="kgf·cm at the shaft vs SG90 stall (1.8) or NEMA 17 holding torque (3.7)">
+                      <td>{a.device}</td>
+                      <td>{(Math.abs(a.torqueKgfCm) < 0.005 ? 0 : a.torqueKgfCm).toFixed(2)}</td>
+                      <td className="bar-cell">
+                        <span className="load-bar" style={{ width: `${Math.min(100, pct * 100)}%` }} />
+                      </td>
+                      <td>{(pct * 100).toFixed(0)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {sorted.length > 6 && (
+              <button type="button" className="link-btn small mono" onClick={() => setShowAllLoads((v) => !v)}>
+                {showAllLoads ? 'Show top 6' : `Show all ${sorted.length}`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="small muted">Drive a joint with a bench servo or stepper to see its gravity load.</p>
         )}
-        <button className="primary wide" disabled={!!busy || !check.ok} onClick={() => run('zip', async () => download(`${asm.name.replace(/[^\w-]+/g, '_')}-fabrication.zip`, await fabricationPackage(project), 'application/zip'))}>
-          {busy === 'zip' ? 'Building…' : `Fabrication package (${asm.links.filter(madeHere).length} parts: STL + drawings + BOM)`}
-        </button>
-        <PrintPanelLazy asm={asm} download={download} />
-        <p className="small muted">Pocket clearance defaults to {DEFAULT_CLEARANCE_MM} mm per side — a printing allowance, not a datasheet value. Holes: M3 {CLEARANCE_HOLE_MM.M3} mm, M2 {CLEARANCE_HOLE_MM.M2} mm (ISO 273 medium).</p>
-      </Block>
+        <div className="lab-row">
+          <button onClick={physics.onCheck} disabled={physics.checking}>
+            {physics.checking ? 'Checking…' : 'Check collisions'}
+          </button>
+          {physics.clashes && <span className={physics.clashes.length ? 'warn-text small' : 'small muted'}>{physics.clashes.length ? `${physics.clashes.length} clash(es)` : 'no clashes'}</span>}
+        </div>
+        {physics.clashes?.slice(0, 8).map((c) => (
+          <div key={`${c.a}|${c.b}`} className="small clash" onClick={() => onSelect(c.a)}>
+            <b className="mono">{c.a}</b> ↔ <b className="mono">{c.b}</b> — {c.volumeMm3.toFixed(0)} mm³
+          </div>
+        ))}
+        {asm.joints.some((j) => j.type === 'prismatic' && j.drive) && <p className="small muted">Prismatic joints: slide forces not computed yet.</p>}
+      </div>
+
+      {tendons.length > 0 && (
+        <CollapsibleBlock
+          title={`TENDONS (${tendons.length})`}
+          defaultOpen={false}
+          right={<span className="muted">{slackCount ? `${slackCount} off` : `${maxTension.toFixed(1)} N max`}</span>}
+        >
+          <TendonsBlock all={tendons} />
+        </CollapsibleBlock>
+      )}
+
+      <div className="lab-block">
+        <DynamicsBlock d={physics.dynamics} />
+      </div>
+    </div>
+  );
+}
+
+/** Right sidebar Make tab: assembly validation, fabrication ZIP, and 3D print planner. */
+export function LabMakePanel({
+  project,
+  asm,
+  download,
+}: {
+  project: Project;
+  asm: Assembly;
+  download: (name: string, data: BlobPart, type: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const check = validateAssembly(asm);
+  return (
+    <div className="lab-block">
+      <div className="lab-block-head mono">
+        <span>FABRICATION</span>
+        <span className="muted">{asm.links.filter(madeHere).length} parts</span>
+      </div>
+      {!check.ok && (
+        <ul className="asm-errors mono small">
+          {check.errors.slice(0, 6).map((e) => <li key={e}>{e}</li>)}
+        </ul>
+      )}
+      <button
+        className="primary wide"
+        disabled={busy || !check.ok}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            download(`${asm.name.replace(/[^\w-]+/g, '_')}-fabrication.zip`, await fabricationPackage(project), 'application/zip');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Building…' : `Fabrication package (${asm.links.filter(madeHere).length} parts)`}
+      </button>
+      <PrintPanelLazy asm={asm} download={download} />
+      <p className="small muted">Pocket clearance {DEFAULT_CLEARANCE_MM} mm/side · M3 {CLEARANCE_HOLE_MM.M3} mm, M2 {CLEARANCE_HOLE_MM.M2} mm (ISO 273).</p>
     </div>
   );
 }
 
 /** The 3D-print mode, opened on demand. */
-function PrintPanelLazy({ asm, download }: { asm: Assembly; download: Props['download'] }) {
+function PrintPanelLazy({ asm, download }: { asm: Assembly; download: (name: string, data: BlobPart, type: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="dyn">
       <label className="section-toggle mono">
-        <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} /> 3D PRINT (orientation, supports, size, scale)
+        <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} /> 3D PRINT PLANNER
       </label>
       {open && <PrintPanel asm={asm} download={download} />}
     </div>
@@ -260,7 +439,7 @@ function MassLine({ link, mp, onMass }: { link: Link; mp?: MassProps; onMass: (g
     <div className="lab-row small">
       <span className="mono">
         mass {mp ? `${mp.massG.toFixed(1)} g` : '…'}
-        {mp?.how === 'solid' && rho && <span className="muted"> · solid {link.material} {rho.gPerCm3} g/cm³</span>}
+        {mp?.how === 'solid' && rho && <span className="muted"> · {link.material} {rho.gPerCm3} g/cm³</span>}
         {mp?.how === 'unknown' && <span className="warn-text"> · {mp.note}</span>}
       </span>
       <Num label="massG" step={1} min={0} value={link.massG ?? NaN} onChange={(g) => onMass(g > 0 ? g : undefined)} />
@@ -268,60 +447,12 @@ function MassLine({ link, mp, onMass }: { link: Link; mp?: MassProps; onMass: (g
   );
 }
 
-/** Gravity loads on the actuators in the current pose, and the interference check. */
-function PhysicsBlock({ physics, asm, onSelect }: { physics: PhysicsView; asm: Assembly; onSelect: (id: string) => void }) {
-  const unknown = physics.massProps ? [...physics.massProps.entries()].filter(([, m]) => m.how === 'unknown').map(([id]) => id) : [];
-  return (
-    <Block title="PHYSICS (gravity, statics)" right={physics.totalMassG !== null ? <span>{physics.totalMassG.toFixed(0)} g</span> : <span className="muted">…</span>}>
-      {unknown.length > 0 && <p className="small warn-text">No mass for {unknown.join(', ')} — set massG.</p>}
-      {physics.actuators.length > 0 ? (
-        <table className="loads mono">
-          <tbody>
-            {physics.actuators.map((a) => {
-              const pct = Math.abs(a.torqueKgfCm) / a.limitKgfCm;
-              return (
-                <tr key={a.device} className={pct >= 1 ? 'over' : pct > 0.7 ? 'high' : ''}>
-                  <td>{a.device}</td>
-                  <td>{(Math.abs(a.torqueKgfCm) < 0.005 ? 0 : a.torqueKgfCm).toFixed(2)}</td>
-                  <td className="bar-cell">
-                    <span className="load-bar" style={{ width: `${Math.min(100, pct * 100)}%` }} />
-                  </td>
-                  <td>{(pct * 100).toFixed(0)}%</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <p className="small muted">Drive a joint with a bench servo or stepper to see its gravity load.</p>
-      )}
-      <p className="small muted">kgf·cm at the shaft vs the SG90 stall (1.8) or NEMA 17 holding torque (3.7). Above 100 % the actuator stalls in the simulation.</p>
-      <div className="lab-row">
-        <button onClick={physics.onCheck} disabled={physics.checking}>
-          {physics.checking ? 'Checking…' : 'Check collisions in this pose'}
-        </button>
-        {physics.clashes && <span className={physics.clashes.length ? 'warn-text small' : 'small muted'}>{physics.clashes.length ? `${physics.clashes.length} clash(es)` : 'no clashes'}</span>}
-      </div>
-      {physics.clashes?.slice(0, 8).map((c) => (
-        <div key={`${c.a}|${c.b}`} className="small clash" onClick={() => onSelect(c.a)}>
-          <b className="mono">{c.a}</b> ↔ <b className="mono">{c.b}</b> — {c.volumeMm3.toFixed(0)} mm³
-        </div>
-      ))}
-      {asm.joints.some((j) => j.type === 'prismatic' && j.drive) && <p className="small muted">Prismatic joints: forces along the slide are not computed yet.</p>}
-      {(asm.tendons?.length ?? 0) > 0 && <TendonsBlock read={physics.tendons} />}
-      <DynamicsBlock d={physics.dynamics} />
-    </Block>
-  );
-}
-
 /** Tendon lines: the most loaded ones, and any that go slack or would have to stretch. */
-function TendonsBlock({ read }: { read: () => TendonReading[] }) {
-  const all = read();
+function TendonsBlock({ all }: { all: TendonReading[] }) {
   const loaded = [...all].sort((a, b) => b.tensionN - a.tensionN).filter((t) => t.tensionN >= 0.05).slice(0, 6);
   const off = all.filter((t) => Math.abs(t.slackMm) > 1);
   return (
-    <div className="dyn">
-      <p className="section-toggle mono">TENDONS ({all.length})</p>
+    <div className="lab-stack">
       {loaded.length ? (
         <table className="loads mono">
           <tbody>
@@ -341,12 +472,11 @@ function TendonsBlock({ read }: { read: () => TendonReading[] }) {
       )}
       {off.slice(0, 6).map((t) => (
         <div key={t.id} className={`small mono ${t.slackMm < 0 ? 'warn-text' : 'muted'}`}>
-          {t.id}: {t.slackMm > 0 ? `${t.slackMm.toFixed(1)} mm slack` : `asked to stretch ${(-t.slackMm).toFixed(1)} mm`}
+          {t.id}: {t.slackMm > 0 ? `${t.slackMm.toFixed(1)} mm slack` : `stretch ${(-t.slackMm).toFixed(1)} mm`}
         </div>
       ))}
-      <p className="small muted">
-        Tension = the actuator's torque share (gravity and contacts it holds) ÷ spool radius, on a line taken as inextensible and frictionless. Colour in 3D: grey none → amber → red at stall. Slack compares the routed length with what
-        the spool reeled in.
+      <p className="small muted" title="Tension = actuator torque share ÷ spool radius (inextensible, frictionless).">
+        3D colour: grey (idle) → amber → red (stall).
       </p>
     </div>
   );
@@ -359,21 +489,20 @@ function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
   const touching = d.on && d.ready ? d.touching() : [];
   const overlaps = d.on && d.ready ? d.restOverlaps() : 0;
   return (
-    <div className="dyn">
-      <label className="section-toggle mono">
+    <div className="lab-stack">
+      <label className="section-toggle mono" title="Torque-limited motors, inertia, gravity, and contacts with the bench and loose objects.">
         <input type="checkbox" checked={d.on} onChange={(e) => d.setOn(e.target.checked)} /> DYNAMICS (Rapier)
         {d.on && !d.ready && <span className="muted"> loading…</span>}
       </label>
       {d.on && d.ready && (
         <>
           <div className="lab-row">
-            <button onClick={() => d.drop('ball')}>drop 30 mm ball</button>
-            <button onClick={() => d.drop('box')}>drop 25 mm cube</button>
+            <button onClick={() => d.drop('ball')}>drop ball</button>
+            <button onClick={() => d.drop('box')}>drop cube</button>
             <button onClick={d.reset}>reset</button>
           </div>
           <p className="small muted">
-            Inertia and gravity on every part; joint motors limited to the SG90 stall (1.8 kgf·cm) or NEMA 17 holding torque through each transmission; parts collide with each other, the bench and loose objects.
-            Parts joined by a hinge never collide with each other{overlaps > 0 && <>, nor do {overlaps} pair(s) that already overlap in the home pose (pins in knuckles, parts seated in pockets)</>}.
+            Torque-limited motors + part contacts{overlaps > 0 ? ` (${overlaps} home-pose overlap pair(s) ignored)` : ''}.
           </p>
           {lagging.length ? (
             <table className="loads mono">
@@ -388,11 +517,11 @@ function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
               </tbody>
             </table>
           ) : (
-            <p className="small ok mono">every joint tracks its actuator (within 5°)</p>
+            <p className="small ok mono">every joint tracks within 5°</p>
           )}
           {touching.length > 0 && (
             <>
-              <p className="small warn-text mono">{touching.length} pair(s) of parts in contact — shown red; a lagging joint next to one is blocked by it</p>
+              <p className="small warn-text mono">{touching.length} contact pair(s) (red in 3D)</p>
               {touching.slice(0, 8).map((t) => (
                 <div key={`${t.a}|${t.b}`} className="small clash">
                   <b className="mono">{t.a}</b> ↔ <b className="mono">{t.b}</b>

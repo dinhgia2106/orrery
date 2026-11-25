@@ -1107,23 +1107,24 @@ function SectionCut({ section }: { section?: Section }) {
 }
 
 /** The jumper wires (ends following moving parts) and the mechanism's tendons. */
-function BenchWires({ project, sim, dyn, anchor, isBoard }: { project: Project; sim: SimRef; dyn?: MutableRefObject<Dynamics | null>; anchor: (ref: string, frames: (t: number) => Map<string, Matrix4> | null) => (t: number) => V3 | null; isBoard: (ref: string) => boolean }) {
+function BenchWires({ project, sim, dyn, anchor, isBoard, showWires = true, showTendons = true }: { project: Project; sim: SimRef; dyn?: MutableRefObject<Dynamics | null>; anchor: (ref: string, frames: (t: number) => Map<string, Matrix4> | null) => (t: number) => V3 | null; isBoard: (ref: string) => boolean; showWires?: boolean; showTendons?: boolean }) {
   const asm = project.assembly;
   const frames = useBenchFrames(asm, sim, dyn);
   return (
     <>
-      {project.wires.map((w) => (
-        <Wire
-          key={w.id}
-          from={anchor(w.a, frames)}
-          to={anchor(w.b, frames)}
-          color={w.color}
-          lift={14}
-          flow={isBoard(w.a) ? 1 : isBoard(w.b) ? -1 : 0}
-          level={() => sim.current?.netState(w.a) ?? null}
-        />
-      ))}
-      {asm?.tendons?.length ? <Tendons asm={asm} sim={sim} dyn={dyn} frames={frames} /> : null}
+      {showWires &&
+        project.wires.map((w) => (
+          <Wire
+            key={w.id}
+            from={anchor(w.a, frames)}
+            to={anchor(w.b, frames)}
+            color={w.color}
+            lift={14}
+            flow={isBoard(w.a) ? 1 : isBoard(w.b) ? -1 : 0}
+            level={() => sim.current?.netState(w.a) ?? null}
+          />
+        ))}
+      {showTendons && asm?.tendons?.length ? <Tendons asm={asm} sim={sim} dyn={dyn} frames={frames} /> : null}
     </>
   );
 }
@@ -1172,7 +1173,7 @@ function CameraRig({ frame, fitKey, focus }: { frame: { target: V3; camera: V3 }
   return null;
 }
 
-export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section; dyn?: MutableRefObject<Dynamics | null> }) {
+export default function Scene({ sim, project, lab, section, dyn, fitKey = 0, showWires = true, showTendons = true }: { sim: SimRef; project: Project; lab?: LabControls; section?: Section; dyn?: MutableRefObject<Dynamics | null>; fitKey?: number; showWires?: boolean; showTendons?: boolean }) {
   // the bench is laid out around the board's centre (or the canvas origin when there is no board)
   const uno = project.devices.find((d) => d.kind === 'uno');
   const ucx = uno ? uno.x + DEVICES.uno.w / 2 : DEVICES.uno.w / 2;
@@ -1180,7 +1181,6 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
   const asm = project.assembly;
   // look at the bench when there is a board, else at the mechanism (scene units are cm)
   const frame = benchFrame(project);
-  const [fit, setFit] = useState(0);
   const focus = useRef<Vector3 | null>(null);
   const mounted = new Set((asm?.mounts ?? []).map((m) => m.device));
 
@@ -1260,7 +1260,6 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
 
   const layoutKey = `${frame.target.join(',')}|${frame.camera.join(',')}`;
   return (
-    <>
     <Canvas shadows camera={{ position: frame.camera, fov: 40, near: 0.05, far: 2000 }} dpr={[1, 2]} gl={{ alpha: true }}>
       <ambientLight intensity={0.75} />
       <hemisphereLight args={['#ffffff', '#d8dde6', 0.6]} />
@@ -1280,7 +1279,7 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
         ))}
         {asm && (dyn?.current ? <DynamicAssemblyView asm={asm} sim={sim} dyn={dyn} lab={lab} /> : <AssemblyView asm={asm} sim={sim} lab={lab} />)}
         {nodes}
-        <BenchWires project={project} sim={sim} dyn={dyn} anchor={anchor} isBoard={isBoard} />
+        <BenchWires project={project} sim={sim} dyn={dyn} anchor={anchor} isBoard={isBoard} showWires={showWires} showTendons={showTendons} />
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />
@@ -1289,12 +1288,7 @@ export default function Scene({ sim, project, lab, section, dyn }: { sim: SimRef
       <Grid args={[40, 40]} cellSize={1} cellColor="#c6d3ea" sectionSize={5} sectionColor="#7f9fd4" cellThickness={0.6} sectionThickness={1} fadeDistance={70} fadeStrength={1.5} infiniteGrid />
       <SectionCut section={section} />
       <OrbitControls makeDefault zoomToCursor minDistance={0.3} maxDistance={400} maxPolarAngle={Math.PI / 2.05} />
-      <CameraRig frame={frame} fitKey={`${layoutKey}#${fit}`} focus={focus} />
+      <CameraRig frame={frame} fitKey={`${layoutKey}#${fitKey}`} focus={focus} />
     </Canvas>
-    <div className="view-tools mono">
-      <button onClick={() => setFit((n) => n + 1)} title="Frame the whole bench">fit view</button>
-      <span className="muted">wheel zooms at the cursor · right-drag pans · double-click flies to a part</span>
-    </div>
-    </>
   );
 }

@@ -22,7 +22,7 @@ import Wiring, { RESISTOR_PRESETS, formatOhms, type Selection } from './lab/Wiri
 import { patchJoint } from './mech/edit';
 import { Dynamics, loadRapier } from './mech/dynamics';
 import { interference, linkFrames, massProperties, type Clash, type MassProps } from './mech/physics';
-import LabPanel from './mech/LabPanel';
+import { LabMakePanel, LabPartInspector, LabPartsPanel, LabPhysicsPanel, type PhysicsView } from './mech/LabPanel';
 import { readTendons } from './mech/tendon';
 import { aiPrompt, assemblyFromStl, jointValues, jointsAtStop, shapeSize, validateAssembly, type Assembly } from './mech/assembly';
 import { CATALOG, SPEC } from './sim/catalog';
@@ -32,6 +32,9 @@ const Scene = lazy(() => import('./Scene'));
 type Section = import('./Scene').Section;
 const STORE_KEY = 'orrery.project.v1';
 type Tab = 'wiring' | 'code' | '3d';
+type LeftTab = 'build' | 'templates' | 'project';
+type RightTab = 'inspect' | 'monitor' | 'physics' | 'make';
+const SPEED_OPTIONS = [0.1, 0.2, 0.5, 1, 1.5, 2];
 
 interface Firmware {
   program: Uint16Array;
@@ -102,6 +105,13 @@ export default function App() {
   const [asmErrors, setAsmErrors] = useState<string[]>([]);
   const [aiRequest, setAiRequest] = useState('a two-finger gripper on one SG90');
   const [labSel, setLabSel] = useState<string | null>(null);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [leftTab, setLeftTab] = useState<LeftTab>('build');
+  const [rightTab, setRightTab] = useState<RightTab>('inspect');
+  const [fitKey, setFitKey] = useState(0);
+  const [showWires, setShowWires] = useState(true);
+  const [showTendons, setShowTendons] = useState(true);
   const [section, setSection] = useState<Section>({ on: false, axis: 'z', offset: 0, flip: false });
   /** Mass properties of the current assembly (computed from the printable solids), keyed by its JSON. */
   const massRef = useRef<{ key: string; props: Map<string, MassProps> } | null>(null);
@@ -544,20 +554,107 @@ export default function App() {
     ...(clashes ?? []).map((c) => ({ level: 'error' as const, msg: `Parts "${c.a}" and "${c.b}" collide: ${c.volumeMm3.toFixed(0)} mm³ overlap in this pose.`, device: undefined as string | undefined })),
   ];
   const madeParts = (asm?.links ?? []).filter((l) => l.make && l.make !== 'buy');
-  const missingMounts = (asm?.mounts ?? []).filter((m) => !project.devices.some((d) => d.id === m.device));
   const bom = billOfMaterials(project);
   const instruments = project.devices.filter((d) => d.kind === 'button' || d.kind === 'pot');
   const pinRef = (ref: string) => ref.replace(/^(\w+)\./, (_, id: string) => `${refs[id] ?? id}.`);
+  const activeRightTab: RightTab = rightTab === 'physics' && !asm ? 'inspect' : rightTab;
+  const onSelectLab = (id: string | null) => {
+    setLabSel(id);
+    if (id) setRightTab('inspect');
+  };
+  const onSelectWiring = (s: Selection) => {
+    setSelection(s);
+    if (s) setRightTab('inspect');
+  };
 
   const setProp = (id: string, props: Record<string, number | string>) =>
     update({ ...project, devices: project.devices.map((d) => (d.id === id ? { ...d, props: { ...d.props, ...props } } : d)) }, true);
 
+  const physicsView: PhysicsView = {
+    tendons: () => {
+      if (!asm?.tendons?.length) return [];
+      const s = sim.current;
+      const d = dynRef.current;
+      const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+      const angle = (dev: string) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined);
+      const efforts = d?.actuatorEfforts();
+      return readTendons(asm, d ? d.frames() : linkFrames(asm, jointValues(asm, angle)), angle, (dev) => (efforts ? efforts.get(dev) : s?.actuatorEffort(dev)));
+    },
+    massProps,
+    actuators: snapshot?.actuators ?? [],
+    totalMassG: snapshot?.mechanismMassG ?? null,
+    clashes,
+    checking,
+    onCheck: () => void checkClashes(),
+    dynamics: {
+      on: dynOn,
+      ready: !!dynRef.current,
+      setOn: setDynOn,
+      reset: () => {
+        // switching off disposes the world; switching back on rebuilds it from the current pose
+        setDynOn(false);
+        setTimeout(() => setDynOn(true), 0);
+      },
+      drop,
+      tracking: () => {
+        const s = sim.current;
+        const stepper = new Set((asm?.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
+        return dynRef.current?.tracking((d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined)) ?? [];
+      },
+      touching: () => dynRef.current?.touching() ?? [],
+      restOverlaps: () => dynRef.current?.restOverlaps() ?? 0,
+    },
+  };
+
+  const controlsBlock = instruments.length > 0 && (
+    <div className="controls-block">
+      <Section n="07" title="Controls" />
+      <ul className="parts">
+        {instruments.map((d) =>
+          d.kind === 'button' ? (
+            <li key={d.id}>
+              <div className="part-head">
+                <span className="ref mono">{refs[d.id]}</span>
+                <strong>Push button</strong>
+              </div>
+              <button
+                className="press"
+                onPointerDown={() => press(d.id, true)}
+                onPointerUp={() => press(d.id, false)}
+                onPointerLeave={() => sim.current?.buttons.get(d.id)?.pressed && press(d.id, false)}
+              >
+                Hold to press
+              </button>
+            </li>
+          ) : (
+            <li key={d.id}>
+              <div className="part-head">
+                <span className="ref mono">{refs[d.id]}</span>
+                <strong>Potentiometer</strong>
+                <span className="pin mono">wiper {String(snapshot?.devices[d.id]?.wiper ?? '—')} V</span>
+              </div>
+              <input type="range" min={0} max={1} step={0.01} defaultValue={0.5} onChange={(e) => sim.current?.pots.get(d.id)?.set(Number(e.target.value))} />
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
+  );
+
+  const toggleSection = () => {
+    const axisIndex = { x: 0, y: 1, z: 2 }[section.axis];
+    const mid = section.axis === 'y' ? 100 : asm?.placement?.[axisIndex] ?? 0;
+    setSection({ ...section, on: !section.on, offset: section.on ? section.offset : mid });
+  };
+
+  const helperText = helper === undefined ? 'Checking compile helper…' : helper ? 'Compile helper connected' : 'No compile helper — run "npm run compiler"';
+
   return (
-    <div className="app">
+    <div className={`app ${leftOpen ? '' : 'no-left'} ${rightOpen ? '' : 'no-right'}`}>
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="24" height="24">
+            <svg viewBox="0 0 32 32" width="22" height="22">
               <circle cx="16" cy="16" r="3.2" fill="currentColor" />
               <ellipse cx="16" cy="16" rx="13" ry="5" fill="none" stroke="currentColor" strokeWidth="1.2" transform="rotate(-25 16 16)" />
               <circle cx="27" cy="10.8" r="2" fill="currentColor" />
@@ -565,124 +662,184 @@ export default function App() {
             </svg>
           </span>
           <strong>Orrery</strong>
-          <span className="chip mono">CUSTOM LAB</span>
           <input className="project-name" value={project.name} onChange={(e) => setProject({ ...project, name: e.target.value })} aria-label="Project name" />
         </div>
-        <div className="status mono">
-          <span className={`dot ${running ? 'on' : ''}`} />
-          <span className="readout">
-            <i>FW</i>
-            {fwLabel}
-            {stale && <em title="The code changed since this firmware was built"> · edited</em>}
-          </span>
-          <span className="readout">
-            <i>T</i>
-            {(snapshot?.time ?? 0).toFixed(2)} s
-          </span>
-          <span className="readout">
-            <i>RT</i>
-            {(realtime * 100).toFixed(0)} %
-          </span>
-        </div>
-      </header>
 
-      <aside className="panel left">
-        <Section n="01" title="Device shelf" />
-        <ul className="shelf">
-          {SHELF.map((k) => {
-            const item = CATALOG[DEVICES[k].catalog];
-            return (
-              <li key={k}>
-                <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`}>
-                  <span className="ref mono">{DEVICES[k].refPrefix}</span>
-                  <span className="shelf-name">
-                    <strong>{DEVICES[k].title}</strong>
-                    <small className="mono">{item.mpn !== '—' ? item.mpn : DEVICES[k].subtitle}</small>
-                  </span>
-                  <span className="add mono">+</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        <Section n="02" title="Run" />
-        <button className="primary wide" onClick={() => void compileAndRun()} disabled={compiling || !hasBoard} title={hasBoard ? undefined : 'Add an Arduino from the shelf to run a sketch'}>
-          {compiling ? 'Compiling…' : hasBoard ? `Compile & run ${boardIds.length > 1 ? active : 'sketch'}` : 'Add a board to run a sketch'}
-        </button>
-        <p className={`helper mono ${helper ? 'ok' : 'off'}`}>
-          {helper === undefined ? 'checking compile helper…' : helper ? '● compile helper connected' : '○ no compile helper — run "npm run compiler"'}
-        </p>
-        <div className="controls">
+        <div className="topbar-controls mono">
+          <button
+            className="primary compile-btn"
+            onClick={() => void compileAndRun()}
+            disabled={compiling || !hasBoard}
+            title={hasBoard ? `${helperText} · active board: ${active}${stale ? ' (edited)' : ''}` : 'Add an Arduino from the shelf to run a sketch'}
+          >
+            <span className={`helper-dot ${helper ? 'ok' : 'off'}`} aria-hidden="true" />
+            {compiling ? 'Compiling…' : 'Compile & run'}
+          </button>
           <button onClick={() => setRunning(!running)} disabled={!sim.current || !!sim.current?.fatal.length}>
             {running ? 'Pause' : 'Run'}
           </button>
           <button onClick={restart} disabled={!sim.current}>
             Reset
           </button>
+          <select aria-label="Simulation speed" value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+            {SPEED_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                ×{s.toFixed(1)}
+              </option>
+            ))}
+          </select>
         </div>
-        <label className="slider">
-          <span className="slider-head mono">
-            <span>SPEED</span>
-            <b>×{speed.toFixed(1)}</b>
+
+        <div className="status mono">
+          <span className={`dot ${running ? 'on' : ''}`} title={`${fwLabel}${stale ? ' · edited' : ''}`} />
+          <span className="readout">
+            <i>T</i>
+            {(snapshot?.time ?? 0).toFixed(1)}s
           </span>
-          <input type="range" min={0.1} max={2} step={0.1} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
-        </label>
-
-        <Section n="03" title="Project" />
-        <div className="file-row">
-          <button onClick={newBench}>New</button>
-          <button onClick={undo} title="Undo (Ctrl+Z)">Undo</button>
-          <button onClick={redo} title="Redo (Ctrl+Y)">Redo</button>
-          <label className="file-btn">
-            Open
-            <input type="file" accept=".json,.hex" onChange={(e) => e.target.files?.[0] && void openFile(e.target.files[0])} />
-          </label>
-          <button onClick={() => download(`${project.name.replace(/[^\w-]+/g, '_') || 'bench'}.orrery.json`, JSON.stringify(project, null, 2), 'application/json')}>Save</button>
-          <button onClick={() => void share()}>Share</button>
+          <span className="readout">
+            <i>RT</i>
+            {(realtime * 100).toFixed(0)}%
+          </span>
+          {checks.length > 0 && (
+            <button
+              type="button"
+              className="check-pill"
+              onClick={() => {
+                setRightOpen(true);
+                setRightTab('monitor');
+              }}
+              title="Open Checks & Monitor"
+            >
+              {checks.length} {checks.length === 1 ? 'issue' : 'issues'}
+            </button>
+          )}
+          <button type="button" className={`panel-toggle ${leftOpen ? 'on' : ''}`} onClick={() => setLeftOpen((o) => !o)} title="Toggle left panel">
+            Left
+          </button>
+          <button type="button" className={`panel-toggle ${rightOpen ? 'on' : ''}`} onClick={() => setRightOpen((o) => !o)} title="Toggle right panel">
+            Right
+          </button>
         </div>
-        <p className="muted small">Open takes a saved project (.json) or firmware (.hex). Projects autosave in this browser.</p>
-        {notice && <p className="notice small">{notice}</p>}
+      </header>
 
-        <Section n="04" title="Mechanism" />
-        {asm ? (
-          <div className="card mech">
-            <strong>{asm.name}</strong>
-            <span className="mono muted small">
-              {asm.links.length} links · {asm.joints.length} joints · {(asm.mounts ?? []).length} mounted devices
-            </span>
-            {missingMounts.length > 0 && <span className="small warn-text">Missing on the bench: {missingMounts.map((m) => m.device).join(', ')}</span>}
+      {leftOpen && (
+        <aside className="panel left">
+          <nav className="subtabs mono" aria-label="Left panel">
+            <button className={leftTab === 'build' ? 'on' : ''} onClick={() => setLeftTab('build')}>
+              {tab === '3d' ? 'Parts' : 'Shelf'}
+            </button>
+            <button className={leftTab === 'templates' ? 'on' : ''} onClick={() => setLeftTab('templates')}>
+              Templates
+            </button>
+            <button className={leftTab === 'project' ? 'on' : ''} onClick={() => setLeftTab('project')}>
+              Project
+            </button>
+          </nav>
+          <div className="panel-body">
+            {leftTab === 'build' &&
+              (tab === '3d' ? (
+                <LabPartsPanel
+                  project={project}
+                  onAssembly={(a) => setProject({ ...project, assembly: a })}
+                  selected={labSel}
+                  onSelect={onSelectLab}
+                  download={download}
+                  onImportFile={(f) => void importMechanismFile(f)}
+                  onOpenAi={() => {
+                    setAsmDialog(true);
+                    setAsmErrors([]);
+                  }}
+                />
+              ) : (
+                <ul className="shelf">
+                  {SHELF.map((k) => {
+                    const item = CATALOG[DEVICES[k].catalog];
+                    return (
+                      <li key={k}>
+                        <button onClick={() => addDevice(k)} title={`Add ${DEVICES[k].title}`}>
+                          <span className="ref mono">{DEVICES[k].refPrefix}</span>
+                          <span className="shelf-name">
+                            <strong>{DEVICES[k].title}</strong>
+                            <small className="mono">{item.mpn !== '—' ? item.mpn : DEVICES[k].subtitle}</small>
+                          </span>
+                          <span className="add mono">+</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ))}
+
+            {leftTab === 'templates' && (
+              <ul className="examples">
+                {TEMPLATES.map((t, i) => (
+                  <li key={t.id}>
+                    <button onClick={() => void loadTemplate(t)} title={t.summary}>
+                      <span className="ex-no mono">TPL-{String(i + 1).padStart(2, '0')}</span>
+                      <strong>{t.title}</strong>
+                      <span>{t.summary}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {leftTab === 'project' && (
+              <div className="lab-stack">
+                <Section n="01" title="Files" />
+                <div className="file-row">
+                  <button onClick={newBench}>New</button>
+                  <button onClick={undo} title="Undo (Ctrl+Z)">Undo</button>
+                  <button onClick={redo} title="Redo (Ctrl+Y)">Redo</button>
+                  <label className="file-btn">
+                    Open
+                    <input type="file" accept=".json,.hex" onChange={(e) => e.target.files?.[0] && void openFile(e.target.files[0])} />
+                  </label>
+                  <button onClick={() => download(`${project.name.replace(/[^\w-]+/g, '_') || 'bench'}.orrery.json`, JSON.stringify(project, null, 2), 'application/json')}>Save</button>
+                  <button onClick={() => void share()}>Share</button>
+                </div>
+                <p className="muted small">Open takes .json or .hex. Projects autosave in this browser.</p>
+                {notice && <p className="notice small">{notice}</p>}
+
+                <Section n="02" title="Firmware" />
+                <p className="mono small">
+                  {fwLabel}
+                  {stale && <span className="warn-text"> · edited</span>}
+                </p>
+                <p className={`helper mono ${helper ? 'ok' : 'off'}`}>
+                  {helper === undefined ? 'checking compile helper…' : helper ? '● compile helper connected' : '○ no compile helper — run "npm run compiler"'}
+                </p>
+                <p className="muted small mono">{COMPILER_URL}</p>
+
+                <Section n="03" title="Mechanism" />
+                {asm ? (
+                  <div className="card mech">
+                    <strong>{asm.name}</strong>
+                    <span className="mono muted small">
+                      {asm.links.length} links · {asm.joints.length} joints · {(asm.mounts ?? []).length} mounted
+                    </span>
+                  </div>
+                ) : (
+                  <p className="muted small">No mechanism yet. Import an Orrery Assembly (.json), an STL, or ask an AI.</p>
+                )}
+                <div className="file-row">
+                  <label className="file-btn">
+                    Import
+                    <input type="file" accept=".json,.stl" onChange={(e) => e.target.files?.[0] && void importMechanismFile(e.target.files[0])} />
+                  </label>
+                  <button onClick={() => { setAsmDialog(true); setAsmErrors([]); }}>AI / paste</button>
+                  <button disabled={!asm} onClick={() => asm && download(`${asm.name.replace(/[^\w-]+/g, '_')}.assembly.json`, JSON.stringify(asm, null, 2), 'application/json')}>Export</button>
+                  <button disabled={!asm} onClick={() => { update({ ...project, assembly: undefined }, true); setLabSel(null); }}>Remove</button>
+                </div>
+                <p className="muted small">
+                  <a href="https://github.com/dinhgia2106/orrery/blob/main/docs/assembly-format.md" target="_blank" rel="noreferrer">Assembly v1</a> ·{' '}
+                  <a href={schemaUrl} target="_blank" rel="noreferrer">JSON Schema</a>
+                </p>
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="muted small">No mechanism yet. Import an Orrery Assembly (.json), an STL, or ask an AI to write one.</p>
-        )}
-        <div className="file-row">
-          <label className="file-btn">
-            Import
-            <input type="file" accept=".json,.stl" onChange={(e) => e.target.files?.[0] && void importMechanismFile(e.target.files[0])} />
-          </label>
-          <button onClick={() => { setAsmDialog(true); setAsmErrors([]); }}>AI / paste</button>
-          <button disabled={!asm} onClick={() => asm && download(`${asm.name.replace(/[^\w-]+/g, '_')}.assembly.json`, JSON.stringify(asm, null, 2), 'application/json')}>Export</button>
-          <button disabled={!asm} onClick={() => update({ ...project, assembly: undefined }, true)}>Remove</button>
-        </div>
-        <p className="muted small">
-          Format: <a href="https://github.com/dinhgia2106/orrery/blob/main/docs/assembly-format.md" target="_blank" rel="noreferrer">Orrery Assembly v1</a> ·{' '}
-          <a href={schemaUrl} target="_blank" rel="noreferrer">JSON Schema</a>
-        </p>
-
-        <Section n="05" title="Templates" />
-        <ul className="examples">
-          {TEMPLATES.map((t, i) => (
-            <li key={t.id}>
-              <button onClick={() => void loadTemplate(t)}>
-                <span className="ex-no mono">TPL-{String(i + 1).padStart(2, '0')}</span>
-                <strong>{t.title}</strong>
-                <span>{t.summary}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
+        </aside>
+      )}
 
       <main className="stage">
         <nav className="tabs mono">
@@ -697,7 +854,7 @@ export default function App() {
         <div className="tab-body">
           {tab === 'wiring' && (
             <>
-              <Wiring project={project} onChange={update} selection={selection} onSelect={setSelection} snapshot={snapshot} refs={refs} onPress={press} />
+              <Wiring project={project} onChange={update} selection={selection} onSelect={onSelectWiring} snapshot={snapshot} refs={refs} onPress={press} />
               {project.devices.length === 0 && (
                 <div className="empty-bench">
                   <strong>The bench is empty</strong>
@@ -740,311 +897,301 @@ export default function App() {
                   project={project}
                   section={section}
                   dyn={dynRef}
+                  fitKey={fitKey}
+                  showWires={showWires}
+                  showTendons={showTendons}
                   lab={{
                     selected: labSel,
-                    onSelect: setLabSel,
+                    onSelect: onSelectLab,
                     onMoveJoint: (id, position) => project.assembly && setProject({ ...project, assembly: patchJoint(project.assembly, id, { position }) }),
                     onMovePlacement: (placement) => project.assembly && setProject({ ...project, assembly: { ...project.assembly, placement } }),
                     clashing: new Set((clashes ?? []).flatMap((c) => [c.a, c.b])),
                   }}
                 />
               </Suspense>
-              <SectionPanel section={section} onChange={setSection} center={project.assembly?.placement} />
-              <LabPanel
-                project={project}
-                onAssembly={(a) => setProject({ ...project, assembly: a })}
-                selected={labSel}
-                onSelect={setLabSel}
-                download={download}
-                physics={{
-                  tendons: () => {
-                    const asm = project.assembly;
-                    if (!asm?.tendons?.length) return [];
-                    const s = sim.current;
-                    const d = dynRef.current;
-                    const stepper = new Set((asm.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-                    const angle = (dev: string) => s?.servos.get(dev)?.angle ?? (stepper.has(dev) ? s?.motorAngle(dev) : undefined);
-                    const efforts = d?.actuatorEfforts();
-                    return readTendons(asm, d ? d.frames() : linkFrames(asm, jointValues(asm, angle)), angle, (dev) => (efforts ? efforts.get(dev) : s?.actuatorEffort(dev)));
-                  },
-                  massProps,
-                  actuators: snapshot?.actuators ?? [],
-                  totalMassG: snapshot?.mechanismMassG ?? null,
-                  clashes,
-                  checking,
-                  onCheck: () => void checkClashes(),
-                  dynamics: {
-                    on: dynOn,
-                    ready: !!dynRef.current,
-                    setOn: setDynOn,
-                    reset: () => {
-                      // switching off disposes the world; switching back on rebuilds it from the current pose
-                      setDynOn(false);
-                      setTimeout(() => setDynOn(true), 0);
-                    },
-                    drop,
-                    tracking: () => {
-                      const s = sim.current;
-                      const asm = project.assembly;
-                      const stepper = new Set((asm?.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
-                      return dynRef.current?.tracking((d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined)) ?? [];
-                    },
-                    touching: () => dynRef.current?.touching() ?? [],
-                    restOverlaps: () => dynRef.current?.restOverlaps() ?? 0,
-                  },
-                }}
-              />
+              <div className="scene-toolbar mono">
+                <button type="button" onClick={() => setFitKey((k) => k + 1)} title="Frame the whole bench">
+                  Fit
+                </button>
+                {project.wires.length > 0 && (
+                  <button type="button" className={showWires ? 'on' : ''} onClick={() => setShowWires((w) => !w)} title="Toggle jumper wires">
+                    Wires
+                  </button>
+                )}
+                {(asm?.tendons?.length ?? 0) > 0 && (
+                  <button type="button" className={showTendons ? 'on' : ''} onClick={() => setShowTendons((t) => !t)} title="Toggle tendon lines">
+                    Tendons
+                  </button>
+                )}
+                <button type="button" className={section.on ? 'on' : ''} onClick={toggleSection} title="Cut the 3D bench with a section plane">
+                  Section
+                </button>
+              </div>
+              {section.on && <SectionPanel section={section} onChange={setSection} center={asm?.placement} />}
               <div className="overlay" aria-hidden="true">
                 <span className="crop tl" />
                 <span className="crop tr" />
                 <span className="crop bl" />
                 <span className="crop br" />
                 <div className="grid-note mono">
-                  <span className="grid-swatch" /> GRID 10 mm
+                  <span className="grid-swatch" /> GRID 10 mm · wheel zoom · right-drag pan · double-click focus
                 </div>
-                <TitleBlock project={project} firmware={fwLabel} />
               </div>
             </>
           )}
         </div>
       </main>
 
-      <aside className="panel right">
-        <Section n="06" title="Inspector" />
-        {selDevice ? (
-          <div className="card inspector">
-            <div className="part-head">
-              <span className="ref mono">{refs[selDevice.id]}</span>
-              <strong>{DEVICES[selDevice.kind].title}</strong>
-              <span className="pin mono">{DEVICES[selDevice.kind].subtitle}</span>
-            </div>
-            {selDevice.kind === 'resistor' && (
-              <label className="field mono">
-                <span>VALUE</span>
-                <select value={selDevice.props.ohms ?? 220} onChange={(e) => setProp(selDevice.id, { ohms: Number(e.target.value) })}>
-                  {RESISTOR_PRESETS.map((o) => (
-                    <option key={o} value={o}>
-                      {formatOhms(o)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {selDevice.kind === 'psu' && (
-              <label className="field mono">
-                <span>OUTPUT V</span>
-                <input type="number" min={0} max={35} step={0.1} value={selDevice.props.volts ?? 12} onChange={(e) => setProp(selDevice.id, { volts: Math.min(35, Math.max(0, Number(e.target.value))) })} />
-              </label>
-            )}
-            {selDevice.kind === 'cap' && (
-              <label className="field mono">
-                <span>µF</span>
-                <input type="number" min={1} max={10000} step={1} value={selDevice.props.uf ?? 100} onChange={(e) => setProp(selDevice.id, { uf: Math.max(1, Number(e.target.value)) })} />
-              </label>
-            )}
-            <StateList state={snapshot?.devices[selDevice.id]} />
-            {selDevice.kind === 'uno' && <p className="muted small">Hover a header pin in the wiring view to see its mode and voltage.</p>}
-            <button className="danger" onClick={() => removeDevice(selDevice.id)}>
-              Remove {refs[selDevice.id]}
+      {rightOpen && (
+        <aside className="panel right">
+          <nav className="subtabs mono" aria-label="Right panel">
+            <button className={activeRightTab === 'inspect' ? 'on' : ''} onClick={() => setRightTab('inspect')}>
+              Inspect
             </button>
-          </div>
-        ) : selWire ? (
-          <div className="card inspector">
-            <div className="part-head">
-              <span className="ref mono">W</span>
-              <strong className="mono">
-                {pinRef(selWire.a)} → {pinRef(selWire.b)}
-              </strong>
-            </div>
-            <div className="swatches">
-              {WIRE_COLORS.map((c) => (
-                <button
-                  key={c}
-                  style={{ background: c }}
-                  className={c === selWire.color ? 'on' : ''}
-                  onClick={() => setProject({ ...project, wires: project.wires.map((w) => (w.id === selWire.id ? { ...w, color: c } : w)) })}
-                  aria-label={`colour ${c}`}
-                />
-              ))}
-            </div>
-            <button
-              className="danger"
-              onClick={() => {
-                update({ ...project, wires: project.wires.filter((w) => w.id !== selWire.id) }, true);
-                setSelection(null);
-              }}
-            >
-              Remove wire
+            <button className={activeRightTab === 'monitor' ? 'on' : ''} onClick={() => setRightTab('monitor')}>
+              Monitor
+              {checks.length > 0 && <span className="badge err">{checks.length}</span>}
             </button>
-          </div>
-        ) : (
-          <p className="muted small">
-            {project.devices.length === 0
-              ? 'The bench is empty. Take parts from the shelf — a board, a bench supply, anything — and wire them pin to pin.'
-              : 'Select a part or a wire. Wire parts pin to pin; with a board on the bench, write the sketch and Compile & run.'}
-          </p>
-        )}
+            {asm && (
+              <button className={activeRightTab === 'physics' ? 'on' : ''} onClick={() => setRightTab('physics')}>
+                Physics
+              </button>
+            )}
+            <button className={activeRightTab === 'make' ? 'on' : ''} onClick={() => setRightTab('make')}>
+              {asm ? 'Make' : 'BOM'}
+            </button>
+          </nav>
 
-        {instruments.length > 0 && (
-          <>
-            <Section n="07" title="Controls" />
-            <ul className="parts">
-              {instruments.map((d) =>
-                d.kind === 'button' ? (
-                  <li key={d.id}>
+          <div className="panel-body">
+            {activeRightTab === 'inspect' && (
+              <div className="lab-stack">
+                {tab === '3d' ? (
+                  <LabPartInspector
+                    project={project}
+                    onAssembly={(a) => setProject({ ...project, assembly: a })}
+                    selected={labSel}
+                    onSelect={onSelectLab}
+                    download={download}
+                    massProps={massProps}
+                    totalMassG={snapshot?.mechanismMassG ?? null}
+                  />
+                ) : selDevice ? (
+                  <div className="card inspector">
                     <div className="part-head">
-                      <span className="ref mono">{refs[d.id]}</span>
-                      <strong>Push button</strong>
+                      <span className="ref mono">{refs[selDevice.id]}</span>
+                      <strong>{DEVICES[selDevice.kind].title}</strong>
+                      <span className="pin mono">{DEVICES[selDevice.kind].subtitle}</span>
+                    </div>
+                    {selDevice.kind === 'resistor' && (
+                      <label className="field mono">
+                        <span>VALUE</span>
+                        <select value={selDevice.props.ohms ?? 220} onChange={(e) => setProp(selDevice.id, { ohms: Number(e.target.value) })}>
+                          {RESISTOR_PRESETS.map((o) => (
+                            <option key={o} value={o}>
+                              {formatOhms(o)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {selDevice.kind === 'psu' && (
+                      <label className="field mono">
+                        <span>OUTPUT V</span>
+                        <input type="number" min={0} max={35} step={0.1} value={selDevice.props.volts ?? 12} onChange={(e) => setProp(selDevice.id, { volts: Math.min(35, Math.max(0, Number(e.target.value))) })} />
+                      </label>
+                    )}
+                    {selDevice.kind === 'cap' && (
+                      <label className="field mono">
+                        <span>µF</span>
+                        <input type="number" min={1} max={10000} step={1} value={selDevice.props.uf ?? 100} onChange={(e) => setProp(selDevice.id, { uf: Math.max(1, Number(e.target.value)) })} />
+                      </label>
+                    )}
+                    <StateList state={snapshot?.devices[selDevice.id]} />
+                    {selDevice.kind === 'uno' && <p className="muted small">Hover a header pin in the wiring view to see its mode and voltage.</p>}
+                    <button className="danger" onClick={() => removeDevice(selDevice.id)}>
+                      Remove {refs[selDevice.id]}
+                    </button>
+                  </div>
+                ) : selWire ? (
+                  <div className="card inspector">
+                    <div className="part-head">
+                      <span className="ref mono">W</span>
+                      <strong className="mono">
+                        {pinRef(selWire.a)} → {pinRef(selWire.b)}
+                      </strong>
+                    </div>
+                    <div className="swatches">
+                      {WIRE_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          style={{ background: c }}
+                          className={c === selWire.color ? 'on' : ''}
+                          onClick={() => setProject({ ...project, wires: project.wires.map((w) => (w.id === selWire.id ? { ...w, color: c } : w)) })}
+                          aria-label={`colour ${c}`}
+                        />
+                      ))}
                     </div>
                     <button
-                      className="press"
-                      onPointerDown={() => press(d.id, true)}
-                      onPointerUp={() => press(d.id, false)}
-                      onPointerLeave={() => sim.current?.buttons.get(d.id)?.pressed && press(d.id, false)}
+                      className="danger"
+                      onClick={() => {
+                        update({ ...project, wires: project.wires.filter((w) => w.id !== selWire.id) }, true);
+                        setSelection(null);
+                      }}
                     >
-                      Hold to press
+                      Remove wire
                     </button>
-                  </li>
+                  </div>
                 ) : (
-                  <li key={d.id}>
-                    <div className="part-head">
-                      <span className="ref mono">{refs[d.id]}</span>
-                      <strong>Potentiometer</strong>
-                      <span className="pin mono">wiper {String(snapshot?.devices[d.id]?.wiper ?? '—')} V</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.01} defaultValue={0.5} onChange={(e) => sim.current?.pots.get(d.id)?.set(Number(e.target.value))} />
-                  </li>
-                ),
-              )}
-            </ul>
-          </>
-        )}
-
-        <Section n="08" title="Checks" />
-        {checks.length ? (
-          <ul className="warnings">
-            {checks.map((c, i) => (
-              <li
-                key={i}
-                className={c.level}
-                onClick={() => {
-                  if (!c.device) return;
-                  setSelection({ type: 'device', id: c.device });
-                  setTab('wiring');
-                }}
-              >
-                {c.device && <b className="mono">{refs[c.device]} </b>}
-                {c.msg}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="ok mono">{snapshot ? '✓ NO PROBLEMS DETECTED' : 'not running'}</p>
-        )}
-
-        <Section n="09" title="Power · 5 V rail" />
-        {!hasBoard && <p className="muted small">No board on the bench: bench supplies power the circuit directly.</p>}
-        {hasBoard && (
-        <>
-        <div className={`gauge ${railMa > limit ? 'over' : ''}`}>
-          <div className="gauge-bar">
-            <span className="gauge-fill" style={{ width: `${Math.min(100, (railMa / gaugeMax) * 100)}%` }} />
-            <span className="gauge-limit" style={{ left: `${(limit / gaugeMax) * 100}%` }} />
-          </div>
-          <div className="gauge-scale mono">
-            <span>0</span>
-            <span style={{ left: `${(limit / gaugeMax) * 100}%` }}>{limit} mA fuse</span>
-          </div>
-          <p className="mono gauge-read">
-            peak <b>~{railMa} mA</b>
-          </p>
-        </div>
-        <p className="muted small">Solved from your wiring; the Uno's own draw and servo current are approximations.</p>
-        </>
-        )}
-
-        <Section n="10" title="Serial monitor" />
-        {boardIds.length > 1 && <BoardTabs ids={boardIds} active={active} onPick={setActiveBoard} refs={refs} programmed={firmwares} />}
-        <pre className="serial">{snapshot?.serial[active] || '—'}</pre>
-        <form
-          className="serial-in"
-          onSubmit={(e) => {
-            e.preventDefault();
-            sim.current?.sendSerial(`${serialIn}\n`, active);
-            setSerialIn('');
-          }}
-        >
-          <input className="mono" value={serialIn} onChange={(e) => setSerialIn(e.target.value)} placeholder="send to Serial (newline added)" />
-          <button type="submit">Send</button>
-        </form>
-
-        <Section n="11" title="Bill of materials" />
-        <ul className="bom">
-          {bom.map((l) => (
-            <li key={l.item.key}>
-              <div className="part-head">
-                <span className="ref mono">{l.refs.join(', ')}</span>
-                <strong>{l.item.name}</strong>
-                <span className="pin mono">QTY {l.qty}</span>
+                  <p className="muted small">
+                    {project.devices.length === 0
+                      ? 'The bench is empty. Add parts from the shelf and wire them pin to pin.'
+                      : 'Select a part or wire to inspect it.'}
+                  </p>
+                )}
+                {controlsBlock}
               </div>
-              <div className="mono">
-                {l.item.manufacturer} <b className="mpn">{l.item.mpn}</b>
-              </div>
-              {l.values.length > 0 && <div className="bom-specs mono">{l.values.join(' · ')}</div>}
-              <div className="bom-specs muted">{l.item.specs.join(' · ')}</div>
-              {l.item.notes?.map((n) => (
-                <div key={n} className="bom-note">
-                  {n}
-                </div>
-              ))}
-              <div className="bom-links">
-                <a href={l.item.url} target="_blank" rel="noreferrer">
-                  Product page
-                </a>
-                <a href={l.item.datasheet.url} target="_blank" rel="noreferrer">
-                  Datasheet
-                </a>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {asm && (madeParts.length > 0 || (asm.hardware ?? []).length > 0) && (
-          <div className="card mech-bom">
-            <div className="part-head">
-              <span className="ref mono">MECH</span>
-              <strong>{asm.name}</strong>
-            </div>
-            {madeParts.length > 0 && (
-              <table className="mono small">
-                <tbody>
-                  {madeParts.map((l) => {
-                    const [x, y, z] = shapeSize(l.shape);
-                    return (
-                      <tr key={l.id}>
-                        <td>{l.make}</td>
-                        <td>{l.label ?? l.id}</td>
-                        <td>{l.material ?? '—'}</td>
-                        <td>{'mesh' in l.shape ? 'STL' : `${Math.round(x)}×${Math.round(y)}×${Math.round(z)}`}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             )}
-            {(asm.hardware ?? []).map((h) => (
-              <div key={h.item} className="small">
-                <b className="mono">{h.qty}×</b> {h.item}
-                {h.note && <span className="muted"> — {h.note}</span>}
+
+            {activeRightTab === 'monitor' && (
+              <div className="lab-stack">
+                <Section n="01" title="Checks" />
+                {checks.length ? (
+                  <ul className="warnings">
+                    {checks.map((c, i) => (
+                      <li
+                        key={i}
+                        className={c.level}
+                        onClick={() => {
+                          if (!c.device) return;
+                          setSelection({ type: 'device', id: c.device });
+                          setTab('wiring');
+                          setRightTab('inspect');
+                        }}
+                      >
+                        {c.device && <b className="mono">{refs[c.device]} </b>}
+                        {c.msg}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ok mono">{snapshot ? '✓ NO PROBLEMS DETECTED' : 'not running'}</p>
+                )}
+
+                <Section n="02" title="Power · 5 V rail" />
+                {!hasBoard && <p className="muted small">No board on the bench: bench supplies power the circuit directly.</p>}
+                {hasBoard && (
+                  <>
+                    <div className={`gauge ${railMa > limit ? 'over' : ''}`}>
+                      <div className="gauge-bar">
+                        <span className="gauge-fill" style={{ width: `${Math.min(100, (railMa / gaugeMax) * 100)}%` }} />
+                        <span className="gauge-limit" style={{ left: `${(limit / gaugeMax) * 100}%` }} />
+                      </div>
+                      <div className="gauge-scale mono">
+                        <span>0</span>
+                        <span style={{ left: `${(limit / gaugeMax) * 100}%` }}>{limit} mA fuse</span>
+                      </div>
+                      <p className="mono gauge-read">
+                        peak <b>~{railMa} mA</b>
+                      </p>
+                    </div>
+                    <p className="muted small">Uno &amp; servo currents are approximations.</p>
+                  </>
+                )}
+
+                <Section n="03" title="Serial monitor" />
+                {boardIds.length > 1 && <BoardTabs ids={boardIds} active={active} onPick={setActiveBoard} refs={refs} programmed={firmwares} />}
+                <pre className="serial">{snapshot?.serial[active] || '—'}</pre>
+                <form
+                  className="serial-in"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sim.current?.sendSerial(`${serialIn}\n`, active);
+                    setSerialIn('');
+                  }}
+                >
+                  <input className="mono" value={serialIn} onChange={(e) => setSerialIn(e.target.value)} placeholder="send to Serial (newline added)" />
+                  <button type="submit">Send</button>
+                </form>
+
+                {controlsBlock}
               </div>
-            ))}
+            )}
+
+            {activeRightTab === 'physics' && asm && <LabPhysicsPanel physics={physicsView} asm={asm} onSelect={onSelectLab} />}
+
+            {activeRightTab === 'make' && (
+              <div className="lab-stack">
+                {asm && <LabMakePanel project={project} asm={asm} download={download} />}
+                <Section n={asm ? '02' : '01'} title="Bill of materials" />
+                <ul className="bom">
+                  {bom.map((l) => (
+                    <li key={l.item.key}>
+                      <div className="part-head">
+                        <span className="ref mono">{l.refs.join(', ')}</span>
+                        <strong>{l.item.name}</strong>
+                        <span className="pin mono">QTY {l.qty}</span>
+                      </div>
+                      <div className="mono">
+                        {l.item.manufacturer} <b className="mpn">{l.item.mpn}</b>
+                      </div>
+                      {l.values.length > 0 && <div className="bom-specs mono">{l.values.join(' · ')}</div>}
+                      <div className="bom-specs muted">{l.item.specs.join(' · ')}</div>
+                      {l.item.notes?.map((n) => (
+                        <div key={n} className="bom-note">
+                          {n}
+                        </div>
+                      ))}
+                      <div className="bom-links">
+                        <a href={l.item.url} target="_blank" rel="noreferrer">
+                          Product page
+                        </a>
+                        <a href={l.item.datasheet.url} target="_blank" rel="noreferrer">
+                          Datasheet
+                        </a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {asm && (madeParts.length > 0 || (asm.hardware ?? []).length > 0) && (
+                  <div className="card mech-bom">
+                    <div className="part-head">
+                      <span className="ref mono">MECH</span>
+                      <strong>{asm.name}</strong>
+                    </div>
+                    {madeParts.length > 0 && (
+                      <table className="mono small">
+                        <tbody>
+                          {madeParts.map((l) => {
+                            const [x, y, z] = shapeSize(l.shape);
+                            return (
+                              <tr key={l.id}>
+                                <td>{l.make}</td>
+                                <td>{l.label ?? l.id}</td>
+                                <td>{l.material ?? '—'}</td>
+                                <td>{'mesh' in l.shape ? 'STL' : `${Math.round(x)}×${Math.round(y)}×${Math.round(z)}`}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {(asm.hardware ?? []).map((h) => (
+                      <div key={h.item} className="small">
+                        <b className="mono">{h.qty}×</b> {h.item}
+                        {h.note && <span className="muted"> — {h.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="muted small">Not listed: jumper wires, breadboard.</p>
+                <button className="press" onClick={() => download('orrery-bom.csv', bomCsv(bom), 'text/csv')}>
+                  Export BOM (.csv)
+                </button>
+              </div>
+            )}
           </div>
-        )}
-        <p className="muted small">Not listed: jumper wires, breadboard.</p>
-        <button className="press" onClick={() => download('orrery-bom.csv', bomCsv(bom), 'text/csv')}>
-          Export BOM (.csv)
-        </button>
-        <p className="muted small">Compile helper: {COMPILER_URL}</p>
-      </aside>
+        </aside>
+      )}
 
       {asmDialog && (
         <div className="modal-back" onClick={() => setAsmDialog(false)}>
@@ -1095,25 +1242,18 @@ function SectionPanel({ section, onChange, center }: { section: Section; onChang
   const set = (patch: Partial<Section>) => onChange({ ...section, ...patch });
   return (
     <div className="section-panel mono">
-      <label className="section-toggle">
-        <input type="checkbox" checked={section.on} onChange={(e) => set({ on: e.target.checked, offset: section.on ? section.offset : mid })} /> SECTION
-      </label>
-      {section.on && (
-        <>
-          <div className="lab-row">
-            {(['x', 'y', 'z'] as const).map((a) => (
-              <button key={a} className={section.axis === a ? 'on' : ''} onClick={() => set({ axis: a, offset: a === 'y' ? 100 : center?.[{ x: 0, y: 1, z: 2 }[a]] ?? 0 })}>
-                {a.toUpperCase()}
-              </button>
-            ))}
-            <button onClick={() => set({ flip: !section.flip })}>flip</button>
-          </div>
-          <input type="range" min={mid - 300} max={mid + 300} step={1} value={section.offset} onChange={(e) => set({ offset: Number(e.target.value) })} />
-          <span>
-            {section.axis.toUpperCase()} = {section.offset} mm
-          </span>
-        </>
-      )}
+      <div className="lab-row">
+        {(['x', 'y', 'z'] as const).map((a) => (
+          <button key={a} className={section.axis === a ? 'on' : ''} onClick={() => set({ axis: a, offset: a === 'y' ? 100 : center?.[{ x: 0, y: 1, z: 2 }[a]] ?? 0 })}>
+            {a.toUpperCase()}
+          </button>
+        ))}
+        <button onClick={() => set({ flip: !section.flip })}>flip</button>
+      </div>
+      <input type="range" min={mid - 300} max={mid + 300} step={1} value={section.offset} onChange={(e) => set({ offset: Number(e.target.value) })} />
+      <span>
+        {section.axis.toUpperCase()} = {section.offset} mm
+      </span>
     </div>
   );
 }
