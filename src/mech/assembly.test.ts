@@ -104,7 +104,7 @@ describe('dexterous hand, 17 DOF on two boards', () => {
   it('U1 makes a fist, tells U2 over serial, and the tendon joints follow', () => {
     const p = cloneProject(TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project);
     const sim = new LabSimulation(p, { uno: parseIntelHex(dexHex), uno2: parseIntelHex(dexWristHex) });
-    sim.step(3); // gesture 0 (open) at 0 s, gesture 1 (fist) at 2.5 s
+    sim.step(3.5); // pose 0 (open) at 0 s, pose 1 (fist) from 2.5 s, eased over 0.4 s
     const snap = sim.snapshot();
     expect(snap.serial.uno).toContain('1 fist');
     expect(snap.serial.uno2).toContain('pose 1 fist');
@@ -118,6 +118,18 @@ describe('dexterous hand, 17 DOF on two boards', () => {
     expect(v.get('wrist_pitch')).toBeCloseTo(((110 - 90) / 180) * 90, 0); // U2 tilts the wrist for the fist
     expect(jointsAtStop(a, angle)).toEqual([]);
   });
+
+  it('bends the first segments alone: in the "knuckles" pose the knuckles reach 90° while the middle joints stay straight', () => {
+    const p = cloneProject(TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project);
+    const sim = new LabSimulation(p, { uno: parseIntelHex(dexHex), uno2: parseIntelHex(dexWristHex) });
+    sim.step(18.3); // pose 7 starts at 7 × 2.5 s = 17.5 s
+    expect(sim.snapshot().serial.uno2).toContain('pose 7 knuckles');
+    const v = jointValues(p.assembly!, (d) => sim.servos.get(d)?.angle);
+    for (const f of ['index', 'middle', 'ring', 'little']) {
+      expect(v.get(`${f}_mcp`)).toBeCloseTo(90, 0);
+      expect(v.get(`${f}_pip`)).toBeCloseTo(0, 0);
+    }
+  }, 60_000);
 
   it('exports a printable servo bed with 15 SG90 pockets and every phalanx', async () => {
     const p = cloneProject(TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project);

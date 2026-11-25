@@ -207,7 +207,7 @@ export const TEMPLATES: Template[] = [
   {
     id: 'dexterous-hand',
     title: 'Dexterous hand, 17 DOF',
-    summary: 'Finger spread, knuckle and middle flex, thumb opposition, wrist rotation and pitch: 17 SG90s on two boards and a 5 V bench supply, printable servo bed.',
+    summary: '17 SG90s on two boards ease through 18 poses — fist, knuckles-only, hook, pinch, grasp, rock, thumbs up, a piano tap… — with finger spread, thumb opposition and a 2-axis wrist; printable servo bed.',
     hex: 'dexterous-hand',
     hexes: { uno2: 'dexterous-hand-wrist' },
     project: dexterousProject(),
