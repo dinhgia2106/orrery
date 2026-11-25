@@ -618,6 +618,9 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
   const loose = useRef<Group>(null);
   const last = useRef<number | null>(null);
   const [looseList, setLooseList] = useState<{ id: string; kind: 'ball' | 'box'; sizeMm: number }[]>([]);
+  /** Parts in contact with another part, refreshed every few frames. */
+  const [touching, setTouching] = useState<Set<string>>(new Set());
+  const frame = useRef(0);
   useFrame((_, delta) => {
     const d = dyn.current;
     if (!d) return;
@@ -634,6 +637,10 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
       g.position.set(...pose.p);
       g.quaternion.set(...pose.q);
     }
+    if (++frame.current % 6 === 0) {
+      const now = new Set(d.touching().flatMap((t) => [t.a, t.b]));
+      if (now.size !== touching.size || [...now].some((id) => !touching.has(id))) setTouching(now);
+    }
     const lp = d.loosePoses();
     if (lp.length !== looseList.length) setLooseList(lp.map(({ id, kind, sizeMm }) => ({ id, kind, sizeMm })));
     lp.forEach((l, i) => {
@@ -645,7 +652,7 @@ function DynamicAssemblyView({ asm, sim, dyn, lab }: { asm: Assembly; sim: SimRe
     <>
       {asm.links.map((link) => (
         <group key={link.id} ref={(g) => (g ? groups.current.set(link.id, g) : groups.current.delete(link.id))}>
-          <LinkShape link={link} selected={lab?.selected === link.id} clash={lab?.clashing?.has(link.id)} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
+          <LinkShape link={link} selected={lab?.selected === link.id} clash={lab?.clashing?.has(link.id) || touching.has(link.id)} onSelect={lab ? (x) => lab.onSelect(x) : undefined} />
           {(asm.mounts ?? [])
             .filter((m) => m.link === link.id)
             .map((m) => (

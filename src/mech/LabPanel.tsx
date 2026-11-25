@@ -17,6 +17,9 @@ export interface PhysicsView {
     reset: () => void;
     drop: (kind: 'ball' | 'box') => void;
     tracking: () => { device: string; commanded: number; actual: number }[];
+    /** Pairs of parts touching right now, and how many pairs were left out because they overlap at rest. */
+    touching: () => { a: string; b: string }[];
+    restOverlaps: () => number;
   };
   massProps: Map<string, MassProps> | null;
   actuators: ActuatorLoad[];
@@ -296,6 +299,8 @@ function PhysicsBlock({ physics, asm, onSelect }: { physics: PhysicsView; asm: A
 function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
   const track = d.on && d.ready ? d.tracking() : [];
   const lagging = track.filter((t) => Math.abs(t.commanded - t.actual) > 5);
+  const touching = d.on && d.ready ? d.touching() : [];
+  const overlaps = d.on && d.ready ? d.restOverlaps() : 0;
   return (
     <div className="dyn">
       <label className="section-toggle mono">
@@ -310,7 +315,8 @@ function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
             <button onClick={d.reset}>reset</button>
           </div>
           <p className="small muted">
-            Inertia and gravity on every part; joint motors limited to the SG90 stall (1.8 kgf·cm) or NEMA 17 holding torque through each transmission; parts touch the bench and loose objects.
+            Inertia and gravity on every part; joint motors limited to the SG90 stall (1.8 kgf·cm) or NEMA 17 holding torque through each transmission; parts collide with each other, the bench and loose objects.
+            Parts joined by a hinge never collide with each other{overlaps > 0 && <>, nor do {overlaps} pair(s) that already overlap in the home pose (pins in knuckles, parts seated in pockets)</>}.
           </p>
           {lagging.length ? (
             <table className="loads mono">
@@ -326,6 +332,16 @@ function DynamicsBlock({ d }: { d: PhysicsView['dynamics'] }) {
             </table>
           ) : (
             <p className="small ok mono">every joint tracks its actuator (within 5°)</p>
+          )}
+          {touching.length > 0 && (
+            <>
+              <p className="small warn-text mono">{touching.length} pair(s) of parts in contact — shown red; a lagging joint next to one is blocked by it</p>
+              {touching.slice(0, 8).map((t) => (
+                <div key={`${t.a}|${t.b}`} className="small clash">
+                  <b className="mono">{t.a}</b> ↔ <b className="mono">{t.b}</b>
+                </div>
+              ))}
+            </>
           )}
         </>
       )}

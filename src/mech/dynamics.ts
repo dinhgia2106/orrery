@@ -39,17 +39,33 @@ export const SERVO_GAIN = 25;
 /** How hard a motor works to reach its target velocity (N·m·s/rad), always capped by the torque limit. A control choice. */
 const MOTOR_DAMPING = 10;
 
-// collision groups: the mechanism touches the bench and loose objects, not itself (the interference check
-// covers part-to-part clashes; parts that overlap at rest would otherwise be pushed apart)
-const GROUP_MECH = (0x0001 << 16) | 0x0002;
+// collision groups: mechanism parts touch each other, the bench and loose objects. Two parts never collide when
+// a joint joins them directly, or when they already overlap in the home pose (hinge knuckles, servos seated in
+// pockets): those are designed overlaps, and pushing them apart would tear the mechanism.
+const GROUP_MECH = (0x0001 << 16) | 0x0003;
 const GROUP_WORLD = (0x0002 << 16) | 0x0003;
+/**
+ * Numerical conditioning, not a datasheet value. Rapier solves joints iteratively, and a chain with a very light
+ * link between heavy ones (a 2 g finger knuckle between a 266 g palm and the finger) does not converge: the joint
+ * gives way under loads far below the actuator's torque. Every moving body therefore gets at least this rotational
+ * inertia about each principal axis (1e-5 kg·m² ≈ 10 g at a 32 mm radius of gyration). Masses, centres of mass and
+ * so gravity loads are unchanged; very light parts only respond more slowly to impacts than they would for real.
+ */
+const MIN_INERTIA = 1e-5;
+/** Solver iterations per step, and internal PGS iterations per solver iteration (Rapier defaults: 4 and 1). */
+const SOLVER_ITERATIONS = 8;
+const PGS_ITERATIONS = 4;
+/** Parts closer than this in the home pose count as overlapping (m): 0.3 mm. */
+const REST_GAP = 0.0003;
+/** Parts closer than this while moving count as touching (m): 0.1 mm. */
+const TOUCH_GAP = 0.0001;
 
 interface JointRt {
   joint: Joint;
-  rj: RAPIER_T.RevoluteImpulseJoint | null;
+  rj: RAPIER_T.RevoluteImpulseJoint;
   parent: RAPIER_T.RigidBody;
   child: RAPIER_T.RigidBody;
-  /** Rotation of the joint frame in the parent link frame. */
+  /** Rotation of the joint frame in the parent body frame. */
   frameQ: Quaternion;
   axis: Vector3;
   /** Joint degrees per device degree, the device's speed and torque at the joint. */
@@ -82,6 +98,17 @@ export class Dynamics {
   readonly loose: LoosePart[] = [];
   private acc = 0;
   private seq = 0;
+  /** Mechanism colliders: which link each belongs to. */
+  private readonly mech = new Map<number, string>();
+  /** Link pairs left out of collision: overlapping in the home pose, or joined by a hinge. */
+  private readonly ignored = new Set<string>();
+  private readonly hinged = new Set<string>();
+  /** Rapier only runs the contact hooks when stepping with an event queue; nothing reads its events. */
+  private readonly queue: RAPIER_T.EventQueue;
+  /** Each link's rigid body (links on fixed joints share their parent's) and the link frame inside it (mm). */
+  private readonly linkBody = new Map<string, RAPIER_T.RigidBody>();
+  private readonly offsets = new Map<string, Matrix4>();
+  private readonly hooks: RAPIER_T.PhysicsHooks;
 
   constructor(
     private readonly lib: R,
@@ -91,7 +118,8 @@ export class Dynamics {
   ) {
     const world = new lib.World({ x: 0, y: -G, z: 0 });
     world.timestep = DT;
-    world.integrationParameters.numSolverIterations = 8;
+    world.integrationParameters.numSolverIterations = SOLVER_ITERATIONS;
+    world.integrationParameters.numInternalPgsIterations = PGS_ITERATIONS;
     this.world = world;
 
     // bench top: a fixed slab whose surface is y = 0
@@ -100,14 +128,38 @@ export class Dynamics {
 
     const frames = linkFrames(asm, start);
     const rootId = asm.links.find((l) => !asm.joints.some((j) => j.child === l.id))!.id;
+    // links held by a fixed joint (and, for now, a prismatic one) are part of their parent's rigid body: one body,
+    // several colliders. A chain of light bodies tied by impulse joints is soft — a motor at stall could push a
+    // fixed part out of its way — while a compound body is exactly rigid.
+    const parentJoint = new Map(asm.joints.map((j) => [j.child, j]));
+    const bodyOf = (id: string, depth = 0): string => {
+      const j = parentJoint.get(id);
+      return j && j.type !== 'revolute' && depth < 64 ? bodyOf(j.parent, depth + 1) : id;
+    };
     for (const l of asm.links) {
-      const m = frames.get(l.id)!;
-      const p = new Vector3();
-      const q = new Quaternion();
-      m.decompose(p, q, new Vector3());
-      const desc = (l.id === rootId ? lib.RigidBodyDesc.fixed() : lib.RigidBodyDesc.dynamic()).setTranslation(p.x * MM, p.y * MM, p.z * MM).setRotation(q);
-      const body = world.createRigidBody(desc);
-      this.bodies.set(l.id, body);
+      const b = bodyOf(l.id);
+      if (!this.bodies.has(b)) {
+        const p = new Vector3();
+        const q = new Quaternion();
+        frames.get(b)!.decompose(p, q, new Vector3());
+        const desc = (b === rootId ? lib.RigidBodyDesc.fixed() : lib.RigidBodyDesc.dynamic()).setTranslation(p.x * MM, p.y * MM, p.z * MM).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+        this.bodies.set(b, world.createRigidBody(desc));
+      }
+      // the link's frame inside its body's frame (mm)
+      this.offsets.set(l.id, new Matrix4().copy(frames.get(b)!).invert().multiply(frames.get(l.id)!));
+      this.linkBody.set(l.id, this.bodies.get(b)!);
+    }
+
+    /** A pose given in a link's frame (mm, rotation), expressed in its body's frame (m). */
+    const inBody = (link: string, pos: Vec3, rot: Quaternion) => {
+      const m = new Matrix4().compose(new Vector3(...pos), rot, new Vector3(1, 1, 1)).premultiply(this.offsets.get(link)!);
+      const t = new Vector3();
+      const r = new Quaternion();
+      m.decompose(t, r, new Vector3());
+      return { t: { x: t.x * MM, y: t.y * MM, z: t.z * MM }, r: { x: r.x, y: r.y, z: r.z, w: r.w } };
+    };
+    for (const l of asm.links) {
+      const body = this.linkBody.get(l.id)!;
       const mp = props.get(l.id);
       const kg = Math.max(1e-4, (mp?.massG ?? 0) / 1000);
       const shape = l.shape;
@@ -117,11 +169,11 @@ export class Dynamics {
       else if ('capsule' in shape) cd = lib.ColliderDesc.capsule((shape.capsule.h / 2) * MM, shape.capsule.r * MM);
       else if ('sphere' in shape) cd = lib.ColliderDesc.ball(shape.sphere * MM);
       if (cd) {
-        const [x, y, z] = l.position ?? [0, 0, 0];
         const rq = new Quaternion().setFromEuler(new Euler(...((l.rotation ?? [0, 0, 0]).map((a) => a * DEG) as [number, number, number])));
+        const { t, r } = inBody(l.id, l.position ?? [0, 0, 0], rq);
         // the primitive's own inertia with the part's real mass (holes and pockets change the mass, not the shape here)
-        world.createCollider(cd.setTranslation(x * MM, y * MM, z * MM).setRotation(rq).setMass(kg).setCollisionGroups(GROUP_MECH), body);
-      } else if (l.id !== rootId) {
+        this.addMech(world.createCollider(cd.setTranslation(t.x, t.y, t.z).setRotation(r).setMass(kg).setCollisionGroups(GROUP_MECH), body), l.id);
+      } else if (!body.isFixed()) {
         body.setAdditionalMass(kg, true); // imported mesh: mass without a collider
       }
     }
@@ -130,41 +182,44 @@ export class Dynamics {
     for (const mt of asm.mounts ?? []) {
       const mm = MOUNT_MASS[mt.kind];
       const size = boxes[mt.kind];
-      const body = this.bodies.get(mt.link);
+      const body = this.linkBody.get(mt.link);
       if (!mm || !size || !body) continue;
-      const pose = new Matrix4().compose(new Vector3(...mt.position), new Quaternion().setFromEuler(new Euler(...((mt.rotation ?? [0, 0, 0]).map((a) => a * DEG) as [number, number, number]))), new Vector3(1, 1, 1));
-      const c = new Vector3(...mm.com).applyMatrix4(pose);
-      const q = new Quaternion().setFromRotationMatrix(pose);
+      const mq = new Quaternion().setFromEuler(new Euler(...((mt.rotation ?? [0, 0, 0]).map((a) => a * DEG) as [number, number, number])));
+      const c = new Vector3(...mm.com).applyQuaternion(mq).add(new Vector3(...mt.position));
+      const { t, r } = inBody(mt.link, [c.x, c.y, c.z], mq);
       const cd = lib.ColliderDesc.cuboid((size[0] / 2) * MM, (size[1] / 2) * MM, (size[2] / 2) * MM)
-        .setTranslation(c.x * MM, c.y * MM, c.z * MM)
-        .setRotation(q)
+        .setTranslation(t.x, t.y, t.z)
+        .setRotation(r)
         .setMass(mm.g / 1000)
         .setCollisionGroups(GROUP_MECH);
-      world.createCollider(cd, body);
+      this.addMech(world.createCollider(cd, body), mt.link);
+    }
+
+    for (const b of new Set(this.linkBody.values())) {
+      if (!b.isDynamic()) continue;
+      const I = b.principalInertia();
+      const add = { x: Math.max(0, MIN_INERTIA - I.x), y: Math.max(0, MIN_INERTIA - I.y), z: Math.max(0, MIN_INERTIA - I.z) };
+      if (add.x || add.y || add.z) b.setAdditionalMassProperties(0, { x: 0, y: 0, z: 0 }, add, b.principalInertiaLocalFrame(), true);
     }
 
     for (const j of asm.joints) {
-      const parent = this.bodies.get(j.parent)!;
-      const child = this.bodies.get(j.child)!;
-      const frameQ = new Quaternion().setFromEuler(new Euler(...((j.rotation ?? [0, 0, 0]).map((a) => a * DEG) as [number, number, number])));
+      if (j.type !== 'revolute') continue; // fixed and prismatic links were merged into their parent's body above
+      const parent = this.linkBody.get(j.parent)!;
+      const child = this.linkBody.get(j.child)!;
+      const off = this.offsets.get(j.parent)!;
+      // the joint frame in the parent *body* frame
+      const frameQ = new Quaternion().setFromRotationMatrix(off).multiply(new Quaternion().setFromEuler(new Euler(...((j.rotation ?? [0, 0, 0]).map((a) => a * DEG) as [number, number, number]))));
       const axis = new Vector3(...(j.axis ?? [0, 0, 1])).normalize();
-      const anchor1 = { x: j.position[0] * MM, y: j.position[1] * MM, z: j.position[2] * MM };
-      let rj: RAPIER_T.RevoluteImpulseJoint | null = null;
-      if (j.type === 'revolute') {
-        // child frame = joint frame × rotation about the axis, so the axis is the same vector in the child frame
-        const a1 = axis.clone().applyQuaternion(frameQ);
-        const data = lib.JointData.revoluteWithAxes(anchor1, { x: 0, y: 0, z: 0 }, a1, axis);
-        rj = world.createImpulseJoint(data, parent, child, true) as RAPIER_T.RevoluteImpulseJoint;
-        // force-based: the motor's max force is a real torque limit in N·m (the acceleration-based model limits acceleration instead)
-        rj.configureMotorModel(lib.MotorModel.ForceBased);
-      } else {
-        // fixed (and, for now, prismatic) joints lock the child where it is
-        const rel = new Quaternion().copy(parent.rotation() as Quaternion).invert().multiply(child.rotation() as Quaternion);
-        const data = lib.JointData.fixed(anchor1, rel, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 });
-        world.createImpulseJoint(data, parent, child, true);
-      }
+      const at = new Vector3(...j.position).applyMatrix4(off);
+      // child frame = joint frame × rotation about the axis, so the axis is the same vector in the child frame
+      const a1 = axis.clone().applyQuaternion(frameQ);
+      const data = lib.JointData.revoluteWithAxes({ x: at.x * MM, y: at.y * MM, z: at.z * MM }, { x: 0, y: 0, z: 0 }, { x: a1.x, y: a1.y, z: a1.z }, { x: axis.x, y: axis.y, z: axis.z });
+      const rj = world.createImpulseJoint(data, parent, child, true) as RAPIER_T.RevoluteImpulseJoint;
+      // force-based: the motor's max force is a real torque limit in N·m (the acceleration-based model limits acceleration instead)
+      rj.configureMotorModel(lib.MotorModel.ForceBased);
+      this.hinged.add(linkKey(j.parent, j.child)); // a hinge's two parts overlap at the pin by design
       const rt: JointRt = { joint: j, rj, parent, child, frameQ, axis };
-      if (rj && j.drive && 'device' in j.drive) {
+      if (j.drive && 'device' in j.drive) {
         const mount = asm.mounts?.find((m) => m.device === (j.drive as { device: string }).device);
         const [f0, f1] = j.drive.from ?? [0, 180];
         const [t0, t1] = j.drive.to ?? j.drive.from ?? [0, 180];
@@ -176,6 +231,65 @@ export class Dynamics {
       }
       this.joints.push(rt);
     }
+
+    // designed overlaps: colliders of two different links on different bodies that touch in the home pose
+    const list = [...this.mech.keys()].map((h) => world.getCollider(h));
+    for (let i = 0; i < list.length; i++)
+      for (let k = i + 1; k < list.length; k++) {
+        const a = list[i];
+        const b = list[k];
+        const la = this.mech.get(a.handle)!;
+        const lb = this.mech.get(b.handle)!;
+        if (la === lb || a.parent()!.handle === b.parent()!.handle || this.hinged.has(linkKey(la, lb))) continue;
+        if (a.shape.contactShape(a.translation(), a.rotation(), b.shape, b.translation(), b.rotation(), REST_GAP)) this.ignored.add(linkKey(la, lb));
+      }
+    this.queue = new lib.EventQueue(true);
+    const skip = (c1: number, c2: number) => {
+      const a = this.mech.get(c1);
+      const b = this.mech.get(c2);
+      if (!a || !b) return false; // the bench and loose objects always collide
+      const k = linkKey(a, b);
+      return this.hinged.has(k) || this.ignored.has(k);
+    };
+    this.hooks = {
+      filterContactPair: (c1, c2) => (skip(c1, c2) ? null : lib.SolverFlags.COMPUTE_IMPULSE),
+      filterIntersectionPair: (c1, c2) => !skip(c1, c2),
+    };
+  }
+
+  private addMech(c: RAPIER_T.Collider, link: string): void {
+    c.setActiveHooks(this.lib.ActiveHooks.FILTER_CONTACT_PAIRS);
+    this.mech.set(c.handle, link);
+  }
+
+  /**
+   * Pairs of mechanism parts touching right now (within TOUCH_GAP or overlapping), jointed neighbours and
+   * designed overlaps excluded. Read from the contact manifolds: Rapier also keeps predictive contacts for
+   * parts that are merely close, so a pair counts only when its nearest contact point is actually closed.
+   */
+  touching(): { a: string; b: string }[] {
+    const found = new Set<string>();
+    for (const [h, a] of this.mech) {
+      const c = this.world.getCollider(h);
+      this.world.contactPairsWith(c, (o) => {
+        const b = this.mech.get(o.handle);
+        if (!b || a === b) return;
+        const k = linkKey(a, b);
+        if (found.has(k) || this.hinged.has(k) || this.ignored.has(k)) return;
+        this.world.contactPair(c, o, (m) => {
+          for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) <= TOUCH_GAP) return void found.add(k);
+        });
+      });
+    }
+    return [...found].sort().map((k) => {
+      const [a, b] = k.split('|');
+      return { a, b };
+    });
+  }
+
+  /** Link pairs left out of collision because they overlap in the home pose. */
+  restOverlaps(): number {
+    return this.ignored.size;
   }
 
   /** Joint angle in degrees, measured from the two bodies (0 = home pose). */
@@ -192,17 +306,16 @@ export class Dynamics {
     while (this.acc >= DT) {
       this.acc -= DT;
       this.drive(deviceAngle);
-      this.world.step();
+      this.world.step(this.queue, this.hooks);
     }
   }
 
   private drive(deviceAngle: (device: string) => number | undefined): void {
     const angles = new Map<string, number>();
-    for (const rt of this.joints) if (rt.rj) angles.set(rt.joint.id, this.angle(rt));
+    for (const rt of this.joints) angles.set(rt.joint.id, this.angle(rt));
     const byId = new Map(this.joints.map((rt) => [rt.joint.id, rt]));
     for (const rt of this.joints) {
       const rj = rt.rj;
-      if (!rj) continue;
       const j = rt.joint;
       const now = angles.get(j.id)!;
       let target: number | undefined;
@@ -223,8 +336,10 @@ export class Dynamics {
         maxTorque = root ? root.maxTorque / Math.max(1e-6, Math.abs(k)) : 0;
       }
       if (target !== undefined && j.limits) target = Math.min(j.limits[1], Math.max(j.limits[0], target));
-      // hard stops: an undriven joint pushed past its limits is held back strongly
-      if (j.limits && (now < j.limits[0] || now > j.limits[1])) {
+      // hard stops: a joint pushed past a limit is held back strongly — unless its actuator is already pulling it
+      // back inside, which it must stay free to do (otherwise a joint that overshoots a stop by a hair sticks there)
+      const pullsBack = target !== undefined && j.limits && ((now > j.limits[1] && target < j.limits[1]) || (now < j.limits[0] && target > j.limits[0]));
+      if (j.limits && (now < j.limits[0] || now > j.limits[1]) && !pullsBack) {
         target = Math.min(j.limits[1], Math.max(j.limits[0], now));
         maxTorque = Math.max(maxTorque, 100);
         maxVel = Infinity;
@@ -253,17 +368,23 @@ export class Dynamics {
   /** World poses of every link (mm). */
   poses(): Map<string, Pose> {
     const out = new Map<string, Pose>();
-    for (const [id, b] of this.bodies) {
+    const m = new Matrix4();
+    const p = new Vector3();
+    const q = new Quaternion();
+    const one = new Vector3(1, 1, 1);
+    for (const [id, b] of this.linkBody) {
       const t = b.translation();
       const r = b.rotation();
-      out.set(id, { p: [t.x / MM, t.y / MM, t.z / MM], q: [r.x, r.y, r.z, r.w] });
+      m.compose(p.set(t.x / MM, t.y / MM, t.z / MM), q.set(r.x, r.y, r.z, r.w), one).multiply(this.offsets.get(id)!);
+      m.decompose(p, q, new Vector3());
+      out.set(id, { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w] });
     }
     return out;
   }
 
   jointAngles(): Map<string, number> {
     const out = new Map<string, number>();
-    for (const rt of this.joints) if (rt.rj) out.set(rt.joint.id, this.angle(rt));
+    for (const rt of this.joints) out.set(rt.joint.id, this.angle(rt));
     return out;
   }
 
@@ -302,6 +423,11 @@ export class Dynamics {
   }
 
   dispose(): void {
+    this.queue.free();
     this.world.free();
   }
+}
+
+function linkKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
 }

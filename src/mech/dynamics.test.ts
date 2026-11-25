@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Assembly } from './assembly';
 import { Dynamics, G, loadRapier } from './dynamics';
+import { TEMPLATES } from '../lab/project';
+import { jointValues } from './assembly';
 import { massProperties } from './physics';
 
 /** A fixed base and a 100 × 10 × 10 mm PLA bar hinged at one end about Z, 200 mm above the bench. */
-function pendulum(opts: { driven?: boolean; massG?: number } = {}): Assembly {
-  return {
+function pendulum(opts: { driven?: boolean; massG?: number; post?: [number, number] } = {}): Assembly {
+  const a: Assembly = {
     format: 'orrery.assembly',
     version: 1,
     name: 'pendulum',
@@ -28,6 +30,12 @@ function pendulum(opts: { driven?: boolean; massG?: number } = {}): Assembly {
     ],
     mounts: opts.driven ? [{ device: 'servo1', kind: 'servo', link: 'base', position: [0, 10, 0] }] : [],
   };
+  if (opts.post) {
+    // a 10 × 10 × 40 mm post fixed to the base, centred at (x, y) in the bar's swing plane
+    a.links.push({ id: 'post', shape: { box: [10, 10, 40] }, position: [0, 0, 0], material: 'PLA', make: 'print' });
+    a.joints.push({ id: 'post-fix', type: 'fixed', parent: 'base', child: 'post', position: [opts.post[0], opts.post[1], 0] });
+  }
+  return a;
 }
 
 describe('rigid-body dynamics (Rapier)', () => {
@@ -88,6 +96,57 @@ describe('rigid-body dynamics (Rapier)', () => {
     const y = ball.body.translation().y * 1000;
     expect(y).toBeGreaterThan(14);
     expect(y).toBeLessThan(16);
+    dyn.dispose();
+  });
+
+  it('a moving part is stopped by another part in its path, and the contact is reported', async () => {
+    const lib = await loadRapier();
+    // post 60 mm out, 50 mm below the hinge: the bar meets it near −35° on its way down to −90°
+    const a = pendulum({ driven: true, post: [60, 150] });
+    const dyn = new Dynamics(lib, a, await massProperties(a), new Map([['hinge', 0]]));
+    expect(dyn.restOverlaps()).toBe(0);
+    for (let i = 0; i < 2 * 240; i++) dyn.step(1 / 240, () => 0); // servo at 0° commands the bar straight down
+    const end = dyn.jointAngles().get('hinge')!;
+    expect(end).toBeGreaterThan(-50);
+    expect(end).toBeLessThan(-20);
+    expect(dyn.touching()).toEqual([{ a: 'bar', b: 'post' }]);
+    dyn.dispose();
+  });
+
+  it('parts that overlap in the home pose are left out of collision instead of being pushed apart', async () => {
+    const lib = await loadRapier();
+    // post right through the level bar
+    const a = pendulum({ driven: true, post: [60, 200] });
+    const dyn = new Dynamics(lib, a, await massProperties(a), new Map([['hinge', 0]]));
+    expect(dyn.restOverlaps()).toBe(1);
+    for (let i = 0; i < 240; i++) dyn.step(1 / 240, () => 90);
+    expect(Math.abs(dyn.jointAngles().get('hinge')!)).toBeLessThan(2);
+    expect(dyn.touching()).toEqual([]);
+    dyn.dispose();
+  });
+
+  it('a joint driven into its stop comes back when the actuator commands it back', async () => {
+    const lib = await loadRapier();
+    const a = pendulum({ driven: true });
+    a.joints[0].limits = [-30, 30];
+    const dyn = new Dynamics(lib, a, await massProperties(a), new Map([['hinge', 0]]));
+    dyn.step(1, () => 0); // servo at 0° commands −90°: the bar goes down onto its −30° stop, gravity leaning on it
+    expect(dyn.jointAngles().get('hinge')!).toBeLessThan(-25);
+    dyn.step(1, () => 90); // back to level
+    expect(Math.abs(dyn.jointAngles().get('hinge')!)).toBeLessThan(2);
+    dyn.dispose();
+  });
+
+  it('the dexterous hand holds its pose: light knuckles between a heavy palm and the fingers do not give way', async () => {
+    const lib = await loadRapier();
+    const asm = TEMPLATES.find((t) => t.id === 'dexterous-hand')!.project.assembly!;
+    const devices = new Set(asm.joints.flatMap((j) => (j.drive && 'device' in j.drive ? [j.drive.device] : [])));
+    const mid = (d: string) => (devices.has(d) ? 90 : undefined);
+    const dyn = new Dynamics(lib, asm, await massProperties(asm), jointValues(asm, mid));
+    dyn.step(1, mid);
+    // every servo-driven joint within 3° of its command (the static gravity loads are all below 10 % of stall)
+    for (const t of dyn.tracking(mid)) expect(Math.abs(t.commanded - t.actual), t.device).toBeLessThan(3);
+    expect(dyn.touching()).toEqual([]);
     dyn.dispose();
   });
 });

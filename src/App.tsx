@@ -778,6 +778,8 @@ export default function App() {
                       const stepper = new Set((asm?.mounts ?? []).filter((m) => m.kind === 'stepper').map((m) => m.device));
                       return dynRef.current?.tracking((d) => s?.servos.get(d)?.angle ?? (stepper.has(d) ? s?.motorAngle(d) : undefined)) ?? [];
                     },
+                    touching: () => dynRef.current?.touching() ?? [],
+                    restOverlaps: () => dynRef.current?.restOverlaps() ?? 0,
                   },
                 }}
               />
