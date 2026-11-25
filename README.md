@@ -84,7 +84,7 @@ It listens on 127.0.0.1 only, accepts requests only from the Orrery pages (local
 
 ### Headless runs
 
-`runProject(project, options)` in `src/headless/run.ts` runs a project with no browser and returns one JSON report. Scripts, tests and (next) an MCP server for coding agents use it to judge a design without the 3D view.
+`runProject(project, options)` in `src/headless/run.ts` runs a project with no browser and returns one JSON report. Scripts, tests and the MCP server (below) use it to judge a design without the 3D view.
 
 ```ts
 const report = await runProject(project, {
@@ -99,7 +99,29 @@ report.problems;  // one line per reason
 
 `shareUrl(project, { uno: hexText })` in `src/lab/share.ts` turns the same bench into a link to the public site, so a tool can hand over what it has just checked.
 
-The report holds every check with the time it first appeared, serial output per board, device states and joint angles sampled every 50 ms (configurable), each actuator's peak load as a share of its limit, clashes, tendon tension and slack, and, with dynamics, how far each joint lagged its servo, which parts touched and where dropped objects ended up. Warnings are reported but do not make `ok` false.
+The report holds every check with the times it was first and last seen and whether it is still there at the end (pins float until `setup()` runs, so some checks clear by themselves), serial output per board, device states and joint angles sampled every 50 ms (configurable), each actuator's peak load as a share of its limit, clashes, tendon tension and slack, and, with dynamics, how far each joint lagged its servo, which parts touched and where dropped objects ended up. Warnings are reported but do not make `ok` false.
+
+### Use it from an AI agent (MCP)
+
+Orrery is also an [MCP](https://modelcontextprotocol.io) server, so a coding agent you already use (Claude Code, Cursor, Gemini CLI, …) can design a bench, run it and fix it with its own model. It runs on your machine over stdio and compiles with your arduino-cli; nothing is sent anywhere.
+
+```bash
+npm install && npm run build:mcp          # → dist-mcp/server.mjs
+claude mcp add orrery -- node /path/to/orrery/dist-mcp/server.mjs
+```
+
+Other clients take the same command in their MCP settings, e.g. `{"mcpServers": {"orrery": {"command": "node", "args": ["/path/to/orrery/dist-mcp/server.mjs"]}}}`.
+
+| Tool | What it does |
+|---|---|
+| `orrery_guide` | The workflow, the [project format](docs/project-format.md), the [assembly format](docs/assembly-format.md), every device with its pins and part number, the templates |
+| `orrery_get_template` | A working template project to start from |
+| `orrery_check` | Fast check without firmware: wires and devices the simulator would ignore (unknown pins or kinds), shorts, assembly errors, mass, parts overlapping in the home pose |
+| `orrery_compile` | Compile every board's sketch (unchanged templates use their prebuilt firmware; results are cached per sketch) |
+| `orrery_simulate` | Compile and run up to 60 s with timed inputs; returns the headless report above, trimmed to the samples and devices asked for |
+| `orrery_share` | A link that opens the bench, firmware included, in the web app |
+
+The loop the server suggests: guide → template or new project → check → simulate with inputs that exercise the design → fix → share. `ok: true` only means nothing is broken; the agent still has to compare the samples with what was asked.
 
 ## Real parts, with part numbers
 
@@ -142,6 +164,7 @@ npm run compiler         # optional: local compile helper (needs arduino-cli)
 npm test                 # simulator, circuit and wiring-mistake tests with real firmware
 npm run build            # static site in dist/
 npm run build:examples   # recompile examples/*.ino into public/examples/*.hex
+npm run build:mcp        # MCP server for AI agents → dist-mcp/server.mjs
 ```
 
 ## How it works
@@ -172,7 +195,8 @@ src/sim/board.ts     Arduino Uno: CPU, timers, ports, ADC, USART (avr8js)
 src/sim/parts.ts     servo, A4988 + stepper, button, potentiometer models
 src/sim/catalog.ts   real parts: MPNs, links and the datasheet figures the models use
 src/Scene.tsx        3D bench in millimetres
-scripts/compile-server.mjs   local compile helper
+scripts/compile-server.mjs   local compile helper;  arduino-cli.mjs  the compile step it shares with the MCP server
+src/mcp/             MCP server: tools.ts (the tools), server.ts (stdio)
 examples/            template sketches;  public/examples/  their prebuilt .hex
 ```
 

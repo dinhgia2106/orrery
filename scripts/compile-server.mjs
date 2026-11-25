@@ -4,11 +4,8 @@
 //   npm run compiler            (needs: arduino-cli core install arduino:avr; arduino-cli lib install Servo)
 //
 // Only pages from the origins below may call it, so another website cannot use your machine to compile.
-import { execFile } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { FQBN, cli, compile } from './arduino-cli.mjs';
 
 const PORT = Number(process.env.ORRERY_COMPILER_PORT ?? 7337);
 const ALLOWED_ORIGINS = new Set([
@@ -20,47 +17,6 @@ const ALLOWED_ORIGINS = new Set([
   ...(process.env.ORRERY_ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
 ]);
 const MAX_BODY = 256 * 1024;
-const FQBN = 'arduino:avr:uno';
-const CLI = process.env.ARDUINO_CLI ?? 'arduino-cli';
-
-let busy = Promise.resolve();
-
-function cli(args, timeoutMs = 120_000) {
-  return new Promise((resolve) => {
-    execFile(CLI, args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) =>
-      resolve({ ok: !err, stdout: String(stdout), stderr: String(stderr), error: err && err.code === 'ENOENT' ? 'arduino-cli not found on PATH' : null }),
-    );
-  });
-}
-
-/** Refuse sketches that try to pull files from this machine into the build (#include of a path, .incbin). */
-function unsafe(code) {
-  const includes = [...code.matchAll(/#\s*include\s*[<"]([^>"]*)[>"]/g)].map((m) => m[1]);
-  const bad = includes.find((p) => p.startsWith('/') || p.startsWith('\\') || p.includes('..') || /^[A-Za-z]:/.test(p));
-  if (bad) return `#include "${bad}" is not allowed: use library headers, not file paths`;
-  if (/\.incbin|\.include\b/.test(code)) return 'assembler .incbin / .include directives are not allowed';
-  return null;
-}
-
-async function compile(code) {
-  const reason = unsafe(code);
-  if (reason) return { ok: false, log: reason };
-  const root = mkdtempSync(join(tmpdir(), 'orrery-sketch-'));
-  try {
-    const dir = join(root, 'sketch');
-    const out = join(root, 'out');
-    mkdirSync(dir);
-    mkdirSync(out);
-    writeFileSync(join(dir, 'sketch.ino'), code);
-    const r = await cli(['compile', '--fqbn', FQBN, '--output-dir', out, '--no-color', dir]);
-    const clean = (s) => s.split(dir).join('').replace(/[\\/]sketch\.ino/g, 'sketch.ino').split(root).join('').split(homedir()).join('~');
-    const log = clean(`${r.stdout}\n${r.stderr}`).trim();
-    if (!r.ok) return { ok: false, log: r.error ?? log };
-    return { ok: true, hex: readFileSync(join(out, 'sketch.ino.hex'), 'utf8'), log };
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}
 
 function send(res, status, body, origin) {
   const headers = { 'Content-Type': 'application/json', Vary: 'Origin' };
@@ -97,8 +53,8 @@ const server = createServer((req, res) => {
         return send(res, 400, { ok: false, log: 'expected JSON {"code": "..."}' }, origin);
       }
       if (typeof code !== 'string') return send(res, 400, { ok: false, log: 'missing "code"' }, origin);
-      // one compile at a time
-      busy = busy.then(async () => send(res, 200, await compile(code), origin)).catch((e) => send(res, 500, { ok: false, log: String(e) }, origin));
+      // compile() queues: one compile at a time
+      compile(code).then((r) => send(res, 200, r, origin)).catch((e) => send(res, 500, { ok: false, log: String(e) }, origin));
     });
     return;
   }

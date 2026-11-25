@@ -42,8 +42,11 @@ export interface RunOptions {
 }
 
 export interface ReportedCheck extends Check {
-  /** Simulated time the check was first seen, s. */
+  /** Simulated time the check was first and last seen (in a sample), s. */
   firstAt: number;
+  lastAt: number;
+  /** Still present at the end of the run (false: it cleared, e.g. pins floating until setup() ran). */
+  atEnd: boolean;
 }
 
 export interface Sample {
@@ -142,7 +145,9 @@ export async function runProject(project: Project, opts: RunOptions): Promise<Ru
   const noteChecks = (list: Check[], t: number) => {
     for (const c of list) {
       const key = `${c.level}|${c.device ?? ''}|${c.msg}`;
-      if (!checks.has(key)) checks.set(key, { ...c, firstAt: r3(t) });
+      const seen = checks.get(key);
+      if (seen) seen.lastAt = r3(t);
+      else checks.set(key, { ...c, firstAt: r3(t), lastAt: r3(t), atEnd: false });
     }
   };
   const apply = (e: BenchInput) => {
@@ -247,6 +252,8 @@ export async function runProject(project: Project, opts: RunOptions): Promise<Ru
   }
 
   const reported = [...checks.values()];
+  const end = samples[samples.length - 1].t;
+  for (const c of reported) c.atEnd = c.lastAt === end;
   for (const c of reported) if (c.level === 'error') problems.push(c.msg);
   for (const c of clashes) problems.push(`${c.a} and ${c.b} overlap by ${c.volumeMm3} mm³ at t = ${c.at} s`);
   for (const p of peaks.values())
