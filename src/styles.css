@@ -442,3 +442,18 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .loads tr.over td { color: var(--danger); }
 .clash { cursor: pointer; color: var(--danger); }
 .dyn { border-top: 1px dashed var(--line-strong); padding-top: 6px; display: grid; gap: 5px; }
+
+.print-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.print-panel label { display: inline-flex; gap: 4px; align-items: center; }
+.print-panel input[type='number'] { font: inherit; font-size: 11px; padding: 1px 3px; max-width: 52px; }
+.print-table { font-size: 10px; }
+.print-table th { text-align: left; font-weight: 500; color: var(--ink-soft); }
+.print-table tr { cursor: pointer; }
+.print-table tr.sel td { background: rgba(28, 79, 160, 0.08); }
+.print-table { width: 100%; table-layout: auto; }
+.print-table td, .print-table th { padding: 2px 3px; vertical-align: middle; }
+.print-table td:first-child { white-space: normal; word-break: break-all; }
+.print-table select { width: 64px; }
+.print-table select { font-size: 10px; max-width: 66px; }
+.print-table button { font-size: 10px; padding: 1px 5px; }
+.print-preview { height: 200px; border: 1px solid var(--ink-soft); border-radius: 4px; background: #fbfcfe; }

@@ -33,6 +33,8 @@ The 3D tab is a lab, not just a view: start a mechanism, add parts (box, cylinde
 
 **Section view**: cut the whole bench with a plane along X, Y or Z (slider, flip) to look inside — pockets, hinge holes, tendon channels and the servos seated in them; cut faces are drawn in red.
 
+**3D print**: *Make it → 3D print* plans every printed part for a slicer: it tries the six ways the part can lie and keeps the one needing least support (or the one you pick), turns it Z up, centres it and sets it on the bed, and lists its size, volume and solid filament mass (sourced densities; infill makes it lighter). Faces leaning more than 45° from vertical, facing down, get support columns (1.2 mm square every 2.5 mm, 0.2 mm gap to the part — rules of thumb you can change, not printer data); a preview shows the part and its supports on your bed size, and parts that do not fit are flagged. A uniform **scale** shrinks or grows everything (Orrery warns that scaled holes and pockets no longer fit real screws and servos). Download one part (STL with its supports) or **Print files (ZIP)**: `print/<part>.stl`, `print/<part>-supports.stl` and `print.csv` with every size and mass.
+
 **Make it**: each part exports as a binary STL (mm) and an A4 drawing (three views, third-angle projection, overall sizes, feature list, title block); **Fabrication package** puts every part's STL and drawing, the BOM (electronics with part numbers, made parts, hardware), the assembly JSON and a README in one ZIP. Pocket clearance (0.2 mm per side by default) is a printing allowance, not a datasheet value — print a test piece.
 
 ### What the physics covers

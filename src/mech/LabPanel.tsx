@@ -9,6 +9,7 @@ import type { Project } from '../lab/project';
 import { DENSITY, type ActuatorLoad, type Clash, type MassProps } from './physics';
 import { CLEARANCE_HOLE_MM, DEFAULT_CLEARANCE_MM } from './solid';
 import type { TendonReading } from './tendon';
+import PrintPanel from './PrintPanel';
 
 export interface PhysicsView {
   dynamics: {
@@ -233,8 +234,22 @@ export default function LabPanel({ project, onAssembly, selected, onSelect, down
         <button className="primary wide" disabled={!!busy || !check.ok} onClick={() => run('zip', async () => download(`${asm.name.replace(/[^\w-]+/g, '_')}-fabrication.zip`, await fabricationPackage(project), 'application/zip'))}>
           {busy === 'zip' ? 'Building…' : `Fabrication package (${asm.links.filter(madeHere).length} parts: STL + drawings + BOM)`}
         </button>
+        <PrintPanelLazy asm={asm} download={download} />
         <p className="small muted">Pocket clearance defaults to {DEFAULT_CLEARANCE_MM} mm per side — a printing allowance, not a datasheet value. Holes: M3 {CLEARANCE_HOLE_MM.M3} mm, M2 {CLEARANCE_HOLE_MM.M2} mm (ISO 273 medium).</p>
       </Block>
+    </div>
+  );
+}
+
+/** The 3D-print mode, opened on demand. */
+function PrintPanelLazy({ asm, download }: { asm: Assembly; download: Props['download'] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="dyn">
+      <label className="section-toggle mono">
+        <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} /> 3D PRINT (orientation, supports, size, scale)
+      </label>
+      {open && <PrintPanel asm={asm} download={download} />}
     </div>
   );
 }
